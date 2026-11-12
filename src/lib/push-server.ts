@@ -1,15 +1,17 @@
 // Server-only: sends Web Push messages for rows in public.notifications.
 import pg from "pg";
 import * as webpush from "web-push";
+import { withoutSslMode } from "./db-url";
 
 let pool: pg.Pool | null = null;
+
 function db() {
   const url = process.env.POSTGRES_URL || process.env.POSTGRES_URL_NON_POOLING || process.env.DATABASE_URL;
   if (!url) throw new Error("no database connection string");
   if (!pool) {
     const local = /@(localhost|127\.0\.0\.1)[:/]/.test(url);
     pool = new pg.Pool({
-      connectionString: url.replace(/[?&]sslmode=[^&]*/g, ""),
+      connectionString: withoutSslMode(url),
       ssl: local ? false : { rejectUnauthorized: false },
       max: 2,
     });

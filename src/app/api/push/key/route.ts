@@ -8,6 +8,9 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const key = await vapidKeys()
     .then((k) => k.publicKey)
-    .catch(() => null);
+    .catch((e) => {
+      console.error("push key unavailable:", e instanceof Error ? e.message : e);
+      return null;
+    });
   return NextResponse.json({ key }, { headers: { "Cache-Control": "no-store" } });
 }
