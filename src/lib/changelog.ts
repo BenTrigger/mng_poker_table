@@ -6,6 +6,15 @@ export type Release = { version: string; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.7.0",
+    date: "2026-11-12",
+    title: "מארח, כתובת וניווט בוויז 🚗",
+    items: [
+      "בפתיחת הרשמה לערב או לטורניר (ובעריכה) אפשר לרשום מי המארח ואת הכתובת",
+      "כפתור \"ניווט בוויז\" בדף הערב ובדף הטורניר, וקישור ניווט גם בהודעת הוואטסאפ",
+    ],
+  },
+  {
     version: "1.6.0",
     date: "2026-11-12",
     title: "מתקנים את הזיהוי, והוא לומד",

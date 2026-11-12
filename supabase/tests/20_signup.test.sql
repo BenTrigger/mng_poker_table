@@ -53,9 +53,9 @@ reset role;
 select tests.eq((select starts_at > now() + interval '8 days' from signups where id = tests.id('signup')), false, 'players cannot change the date');
 
 select tests.login('admin');
-update signups set starts_at = now() + interval '3 hours', location = 'אצל דני' where id = tests.id('signup');
+update signups set starts_at = now() + interval '3 hours', location = 'אצל דני', address = 'הרצל 10, תל אביב' where id = tests.id('signup');
 reset role;
-select tests.eq((select starts_at < now() + interval '1 day' and location = 'אצל דני' from signups where id = tests.id('signup')), true, 'the admin can fix the date and place');
+select tests.eq((select starts_at < now() + interval '1 day' and location = 'אצל דני' and address = 'הרצל 10, תל אביב' from signups where id = tests.id('signup')), true, 'the admin can fix the date, host and address');
 
 select tests.login('admin');
 select public.resize_signup(tests.id('signup'), 2);

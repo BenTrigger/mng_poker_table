@@ -26,7 +26,8 @@ export function signupShareText(tableName: string, s: Signup, seats: SignupSeat[
     `♠️ ערב פוקר - ${tableName}`,
     `📅 ${signupDate(s.starts_at)} בשעה ${signupTime(s.starts_at)}`,
   ];
-  if (s.location) lines.push(`📍 ${s.location}`);
+  if (s.location) lines.push(`🏠 מארח: ${s.location}`);
+  if (s.address) lines.push(`📍 ${s.address}`, `🚗 ניווט בוויז: ${wazeUrl(s.address)}`);
   if (s.note) lines.push(`📝 ${s.note}`);
   lines.push("");
   if (taken.length) {
@@ -39,6 +40,9 @@ export function signupShareText(tableName: string, s: Signup, seats: SignupSeat[
   else lines.push(free > 0 ? `נשארו ${free} מקומות. תפסו מקום בשולחן 👇` : "השולחן מלא. אפשר להירשם לרשימת המתנה 👇", link);
   return lines.join("\n");
 }
+
+/** Open the address in Waze and start navigating */
+export const wazeUrl = (address: string) => `https://waze.com/ul?q=${encodeURIComponent(address)}&navigate=yes`;
 
 export const whatsappUrl = (text: string) => `https://wa.me/?text=${encodeURIComponent(text)}`;
 

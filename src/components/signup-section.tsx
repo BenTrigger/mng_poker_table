@@ -24,6 +24,7 @@ export function UpcomingSignups({ tableId, isAdmin }: { tableId: string; isAdmin
   const [startsAt, setStartsAt] = useState(defaultStart);
   const [seats, setSeats] = useState(9);
   const [place, setPlace] = useState("");
+  const [address, setAddress] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -40,6 +41,7 @@ export function UpcomingSignups({ tableId, isAdmin }: { tableId: string; isAdmin
         starts_at: new Date(startsAt).toISOString(),
         seats,
         location: place.trim() || null,
+        address: address.trim() || null,
         note: note.trim() || null,
         created_by: u.user?.id,
       })
@@ -135,8 +137,11 @@ export function UpcomingSignups({ tableId, isAdmin }: { tableId: string; isAdmin
               ))}
             </div>
           </Field>
-          <Field label="איפה (לא חובה)">
-            <input className={inputCls} placeholder="אצל יוסי, רחוב הרצל 10" value={place} onChange={(e) => setPlace(e.target.value)} />
+          <Field label="מארח (לא חובה)">
+            <input className={inputCls} placeholder="אצל יוסי" value={place} onChange={(e) => setPlace(e.target.value)} />
+          </Field>
+          <Field label="כתובת (לא חובה)" hint="החברים יוכלו לנווט אליה בוויז בלחיצה.">
+            <input className={inputCls} placeholder="הרצל 10, תל אביב" value={address} onChange={(e) => setAddress(e.target.value)} />
           </Field>
           <Field label="הערה (לא חובה)">
             <input className={inputCls} placeholder="כניסה 100 ₪, מביאים בירות" value={note} onChange={(e) => setNote(e.target.value)} />

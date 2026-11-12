@@ -175,6 +175,7 @@ export type Signup = {
   table_id: string;
   starts_at: string;
   location: string | null;
+  address: string | null;
   note: string | null;
   seats: number;
   status: "open" | "closed" | "started" | "cancelled";
@@ -208,6 +209,7 @@ export type Tournament = {
   name: string;
   starts_at: string;
   location: string | null;
+  address: string | null;
   note: string | null;
   table_count: number;
   seats_per_table: number;

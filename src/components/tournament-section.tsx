@@ -114,6 +114,7 @@ export const DEFAULT_FORM: TournamentForm = {
   name: "טורניר",
   startsAt: "",
   location: "",
+  address: "",
   note: "",
   tables: 1,
   seats: 9,
@@ -132,6 +133,7 @@ export function formFromTournament(t: Tournament): TournamentForm {
     name: t.name,
     startsAt: toLocalInput(new Date(t.starts_at)),
     location: t.location ?? "",
+    address: t.address ?? "",
     note: t.note ?? "",
     tables: t.table_count,
     seats: t.seats_per_table,
@@ -150,6 +152,7 @@ export function tournamentFields(f: TournamentForm) {
     name: f.name.trim() || "טורניר",
     starts_at: new Date(f.startsAt).toISOString(),
     location: f.location.trim() || null,
+    address: f.address.trim() || null,
     note: f.note.trim() || null,
     table_count: f.tables,
     seats_per_table: f.seats,
@@ -206,7 +209,7 @@ export function TournamentFormView({
 }: { tableId: string; initial?: Partial<TournamentForm>; existing?: Tournament; onSaved?: () => void }) {
   const router = useRouter();
   const [f, setF] = useState<TournamentForm>(() =>
-    existing ? formFromTournament(existing) : { ...DEFAULT_FORM, ...initial, startsAt: defaultStart(), location: "", note: "" },
+    existing ? formFromTournament(existing) : { ...DEFAULT_FORM, ...initial, startsAt: defaultStart(), location: "", address: "", note: "" },
   );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -327,8 +330,11 @@ export function TournamentFormView({
         <input type="checkbox" className="size-5 accent-[var(--color-gold)]" checked={f.addon} onChange={(e) => set("addon", e.target.checked)} />
       </label>
 
-      <Field label="איפה (לא חובה)">
-        <input className={inputCls} placeholder="אצל יוסי, רחוב הרצל 10" value={f.location} onChange={(e) => set("location", e.target.value)} />
+      <Field label="מארח (לא חובה)">
+        <input className={inputCls} placeholder="אצל יוסי" value={f.location} onChange={(e) => set("location", e.target.value)} />
+      </Field>
+      <Field label="כתובת (לא חובה)" hint="החברים יוכלו לנווט אליה בוויז בלחיצה.">
+        <input className={inputCls} placeholder="הרצל 10, תל אביב" value={f.address} onChange={(e) => set("address", e.target.value)} />
       </Field>
       <Field label="הערה (לא חובה)">
         <input className={inputCls} placeholder="מגיעים חצי שעה לפני" value={f.note} onChange={(e) => set("note", e.target.value)} />

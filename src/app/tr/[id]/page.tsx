@@ -2,7 +2,7 @@
 import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  CalendarClock, MapPin, Share2, Copy, Check, Lock, LockOpen, Play, Hourglass, LogOut, Ban, UserPlus, Trophy, Pencil, Coins, Layers, Repeat,
+  CalendarClock, Share2, Copy, Check, Lock, LockOpen, Play, Hourglass, LogOut, Ban, UserPlus, Trophy, Pencil, Coins, Layers, Repeat,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/hooks";
@@ -11,6 +11,7 @@ import { clockState, prizePool, tournamentError, tournamentInviteText } from "@/
 import { signupDate, signupTime, whatsappUrl } from "@/lib/signup";
 import { formatMoney } from "@/lib/calc";
 import { TopBar } from "@/components/top-bar";
+import { PlaceInfo } from "@/components/place";
 import { Avatar, Badge, Button, Card, Empty, Sheet, Spinner, Toast } from "@/components/ui";
 import { T_STATUS, TournamentFormView } from "@/components/tournament-section";
 import type { Member, TournamentEntryView } from "@/lib/types";
@@ -111,12 +112,8 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
             <span className="inline-flex items-center gap-1">
               <CalendarClock className="size-4" /> <span className="num">{signupTime(t.starts_at)}</span>
             </span>
-            {t.location && (
-              <span className="inline-flex items-center gap-1">
-                <MapPin className="size-4" /> {t.location}
-              </span>
-            )}
           </div>
+          <PlaceInfo host={t.location} address={t.address} />
           <div className="flex flex-wrap gap-1.5 pt-1">
             <Badge tone="gold">
               <Coins className="size-3" /> כניסה {formatMoney(Number(t.buy_in))}

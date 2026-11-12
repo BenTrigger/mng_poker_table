@@ -13,7 +13,7 @@ import { ResultsView } from "../../tr/[id]/results";
 const names = ["בן", "אורי", "דניאל", "יוסי", "מיכל", "רון", "עידו", "שני", "טל", "נועה", "גיל", "אבי", "רותם", "שחר"];
 const base = Date.now();
 const t: Tournament = {
-  id: "t", table_id: "tb", name: "טורניר חמישי", starts_at: new Date(base).toISOString(), location: "אצל בן", note: null,
+  id: "t", table_id: "tb", name: "טורניר חמישי", starts_at: new Date(base).toISOString(), location: "אצל בן", address: "הרצל 10, תל אביב", note: null,
   table_count: 2, seats_per_table: 9, buy_in: 100, starting_stack: 10000, rebuy_until_level: 4, rebuy_price: null, rebuy_chips: null,
   addon_price: 100, addon_chips: 10000, late_reg_until_level: 4, levels: blindStructure(10000, 20), registration_open: false,
   status: "running", clock_anchor: new Date(base - 47 * 60_000 - 13_000).toISOString(), paused_at: null,

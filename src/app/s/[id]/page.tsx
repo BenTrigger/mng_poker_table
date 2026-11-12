@@ -3,12 +3,13 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  CalendarClock, MapPin, Share2, Copy, Check, Lock, LockOpen, Play, Hourglass, LogOut, Minus, Plus, Ban, UserPlus, ArrowDownToLine, Trash2, Armchair, Pencil,
+  CalendarClock, Share2, Copy, Check, Lock, LockOpen, Play, Hourglass, LogOut, Minus, Plus, Ban, UserPlus, ArrowDownToLine, Trash2, Armchair, Pencil,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/hooks";
 import { PokerTable, type Seat } from "@/components/poker-table";
 import { TopBar } from "@/components/top-bar";
+import { PlaceInfo } from "@/components/place";
 import { Avatar, Badge, Button, Card, Empty, Field, Sheet, Spinner, Toast, inputCls } from "@/components/ui";
 import { seatMap, signupDate, signupError, signupLink, signupShareText, signupTime, useSignup, waitingList, whatsappUrl } from "@/lib/signup";
 import type { Member, SignupSeat } from "@/lib/types";
@@ -36,7 +37,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
   const [copied, setCopied] = useState(false);
   const [seatSheet, setSeatSheet] = useState<number | null>(null); // seat number the admin/player tapped
   const [members, setMembers] = useState<Member[]>([]);
-  const [edit, setEdit] = useState<{ startsAt: string; place: string; note: string } | null>(null);
+  const [edit, setEdit] = useState<{ startsAt: string; place: string; address: string; note: string } | null>(null);
 
   const isAdmin = view?.me?.role === "admin" && view.me.status === "active";
   const tableId = view?.table.id;
@@ -100,7 +101,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
     run("status", () => supabase().from("signups").update({ status }).eq("id", s.id), status === "open" ? "ההרשמה נפתחה" : status === "closed" ? "ההרשמה נסגרה" : "הערב בוטל");
 
   const editable = isAdmin && (s.status === "open" || s.status === "closed");
-  const openEdit = () => setEdit({ startsAt: toLocalInput(new Date(s.starts_at)), place: s.location ?? "", note: s.note ?? "" });
+  const openEdit = () => setEdit({ startsAt: toLocalInput(new Date(s.starts_at)), place: s.location ?? "", address: s.address ?? "", note: s.note ?? "" });
   async function saveEdit() {
     if (!edit?.startsAt) return;
     const ok = await run(
@@ -108,7 +109,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
       () =>
         supabase()
           .from("signups")
-          .update({ starts_at: new Date(edit.startsAt).toISOString(), location: edit.place.trim() || null, note: edit.note.trim() || null })
+          .update({ starts_at: new Date(edit.startsAt).toISOString(), location: edit.place.trim() || null, address: edit.address.trim() || null, note: edit.note.trim() || null })
           .eq("id", s.id)
           .select("id")
           .single(),
@@ -145,7 +146,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
             <div className="flex items-center gap-2">
               <Badge tone={STATUS[s.status].tone}>{STATUS[s.status].label}</Badge>
               {editable && (
-                <Button size="sm" variant="soft" onClick={openEdit} aria-label="עריכת תאריך ופרטים">
+                <Button size="sm" variant="soft" onClick={openEdit} aria-label="עריכת תאריך, מארח וכתובת">
                   <Pencil className="size-4" /> עריכה
                 </Button>
               )}
@@ -155,12 +156,8 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
             <span className="inline-flex items-center gap-1">
               <CalendarClock className="size-4" /> <span className="num">{signupTime(s.starts_at)}</span>
             </span>
-            {s.location && (
-              <span className="inline-flex items-center gap-1">
-                <MapPin className="size-4" /> {s.location}
-              </span>
-            )}
           </div>
+          <PlaceInfo host={s.location} address={s.address} />
           {s.note && <p className="text-sm">{s.note}</p>}
         </Card>
 
@@ -348,8 +345,11 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
             <Field label="מתי">
               <input type="datetime-local" className={inputCls} value={edit.startsAt} onChange={(e) => setEdit({ ...edit, startsAt: e.target.value })} />
             </Field>
-            <Field label="איפה (לא חובה)">
-              <input className={inputCls} value={edit.place} onChange={(e) => setEdit({ ...edit, place: e.target.value })} />
+            <Field label="מארח (לא חובה)">
+              <input className={inputCls} placeholder="אצל יוסי" value={edit.place} onChange={(e) => setEdit({ ...edit, place: e.target.value })} />
+            </Field>
+            <Field label="כתובת (לא חובה)" hint="החברים יוכלו לנווט אליה בוויז בלחיצה.">
+              <input className={inputCls} placeholder="הרצל 10, תל אביב" value={edit.address} onChange={(e) => setEdit({ ...edit, address: e.target.value })} />
             </Field>
             <Field label="הערה (לא חובה)">
               <input className={inputCls} value={edit.note} onChange={(e) => setEdit({ ...edit, note: e.target.value })} />
