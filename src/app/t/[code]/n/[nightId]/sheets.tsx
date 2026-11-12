@@ -223,7 +223,9 @@ export function ChipCounter({
   const [aiOn, setAiOn] = useState(false);
   const [counting, setCounting] = useState(false);
   const [count, setCount] = useState<ChipCount | null>(null);
-  const [manual, setManual] = useState<string>("");
+  // a hand-over starts at what the player asked for: no photo needed, one tap to confirm
+  const [manual, setManual] = useState<string>(verdict && expected ? String(expected) : "");
+  const [byColour, setByColour] = useState(false);
   const [fixed, setFixed] = useState<Record<string, number>>({});
   const [note, setNote] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -297,18 +299,22 @@ export function ChipCounter({
       )}
 
       {counting && <div className="flex items-center justify-center gap-2 py-2 text-sm text-gold"><Sparkles className="size-4 animate-pulse" /> סופר צ'יפים...</div>}
-      {count && (
+      {(count || byColour) && (
         <Card className="space-y-2 p-3">
+          {count ? (
           <div className="flex items-center justify-between text-sm">
             <span className="font-bold">זיהיתי בתמונה</span>
             <Badge tone={count.confidence === "high" ? "win" : count.confidence === "medium" ? "warn" : "loss"}>
               ביטחון {count.confidence === "high" ? "גבוה" : count.confidence === "medium" ? "בינוני" : "נמוך"}
             </Badge>
           </div>
+          ) : (
+            <div className="text-sm font-bold">פירוט לפי צבעים</div>
+          )}
           <div className="space-y-1.5">
             {(chipSet?.chips ?? []).map((chip) => {
               const n = fixed[chip.color] ?? 0;
-              const was = count.counts.find((x) => x.color === chip.color)?.count ?? 0;
+              const was = count ? count.counts.find((x) => x.color === chip.color)?.count ?? 0 : n;
               return (
                 <div key={chip.color} className="flex items-center gap-2">
                   <ChipDot hex={chip.hex} size={18} />
@@ -327,6 +333,8 @@ export function ChipCounter({
               );
             })}
           </div>
+          {count ? (
+          <>
           <p className="text-[11px] text-muted">הזיהוי טעה? תקן את הכמות לכל צבע והסכום יתעדכן. התיקון נשמר לערכה ועוזר לזיהוי הבא.</p>
           {count.notes && <p className="text-xs text-muted">{count.notes}</p>}
           <input
@@ -336,11 +344,25 @@ export function ChipCounter({
             maxLength={300}
             onChange={(e) => setNote(e.target.value)}
           />
+          </>
+          ) : (
+            <p className="text-[11px] text-muted">הסכום מתעדכן לפי הצבעים.</p>
+          )}
         </Card>
       )}
       {verdict && count && expected != null && total > 0 && <Verdict expected={expected} total={total} low={count.confidence === "low"} />}
       {err && <p className="text-xs text-warn">{err}</p>}
 
+      {!count && !counting && (
+        <div className="flex items-center justify-between gap-2 text-xs text-muted">
+          <span>צילום לא חובה: אפשר פשוט לרשום כמה צ&apos;יפים{verdict ? " נמסרו" : ""}.</span>
+          {chipSet && !byColour && (
+            <button type="button" className="shrink-0 font-bold text-gold" onClick={() => setByColour(true)}>
+              פירוט לפי צבעים
+            </button>
+          )}
+        </div>
+      )}
       <Field label="סה״כ צ'יפים" hint={edited ? "שינית את הספירה. התיקון יתועד ביומן הערב." : undefined}>
         <input className={`${inputCls} text-center text-2xl font-extrabold`} inputMode="numeric" value={manual} onChange={(e) => setManual(e.target.value)} placeholder={expected ? String(expected) : "0"} />
       </Field>

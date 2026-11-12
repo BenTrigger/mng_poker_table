@@ -141,6 +141,9 @@ test("a full game night with six players", async ({ browser, baseURL }) => {
     const card = sheet(p).locator("div.rounded-3xl", { hasText: name }).filter({ hasText: `${chips.toLocaleString()} צ'יפים` });
     await card.getByRole("button", { name: "מסירה וצילום" }).click();
     await expect(sheet(p).getByText("ביקש")).toBeVisible();
+    // no photo needed: the total starts at what was asked for
+    await expect(sheet(p).getByLabel("סה״כ צ'יפים")).toHaveValue(String(chips));
+    await expect(sheet(p).getByText("צילום לא חובה")).toBeVisible();
   }
 
   await test.step("Avi asks for a buy-in, the cashier hands it over and the photo matches", async () => {
