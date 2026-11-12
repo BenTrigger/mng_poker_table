@@ -68,18 +68,17 @@ jobs:
           NEXT_PUBLIC_APK_URL: ${{ vars.APK_URL }}
 
       - name: Deploy to Cloudflare
+        # NEXT_PUBLIC_* values are baked in at build time; runtime-only values are Worker secrets
         run: |
-          npx opennextjs-cloudflare deploy -- \
-            --var NEXT_PUBLIC_SUPABASE_URL:${{ steps.supa.outputs.url }} \
-            --var NEXT_PUBLIC_SUPABASE_ANON_KEY:${{ steps.supa.outputs.anon }} \
-            --var ANDROID_CERT_SHA256:"${{ vars.ANDROID_CERT_SHA256 }}"
-          if [ -n "$ANTHROPIC_API_KEY" ]; then
-            echo "$ANTHROPIC_API_KEY" | npx wrangler secret put ANTHROPIC_API_KEY
-          fi
+          npx opennextjs-cloudflare deploy
+          put() { if [ -n "$2" ]; then printf '%s' "$2" | npx wrangler secret put "$1"; fi; }
+          put ANTHROPIC_API_KEY "$ANTHROPIC_API_KEY"
+          put ANDROID_CERT_SHA256 "$ANDROID_CERT_SHA256"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANDROID_CERT_SHA256: ${{ vars.ANDROID_CERT_SHA256 }}
 
       - name: Smoke test
         run: |
