@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { Share2, Undo2, Lock } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import { results, tournamentResultText } from "@/lib/tournament";
+import { results, tournamentResultText, upfrontPayouts } from "@/lib/tournament";
 import { formatMoney, formatSigned, settle, settleViaHub } from "@/lib/calc";
 import { whatsappUrl } from "@/lib/signup";
 import { Avatar, Badge, Button, Card } from "@/components/ui";
@@ -19,7 +19,13 @@ export function ResultsView({ view, isAdmin, myId, run }: { view: TournamentView
   const rows = useMemo(() => results(t, entries), [t, entries]);
   const name = (memberId: string) => entries.find((e) => e.member_id === memberId)?.display_name ?? "המארגן";
   const nets = rows.map((r) => ({ id: r.member_id, net: r.net }));
-  const transfers = mode === "hub" && view.organizer_member_id ? settleViaHub(nets, view.organizer_member_id) : settle(nets);
+  // cash paid at the door: the organizer holds the pot and pays out the prizes
+  const upfront = t.payment_mode === "upfront";
+  const transfers = upfront
+    ? upfrontPayouts(rows, view.organizer_member_id ?? "")
+    : mode === "hub" && view.organizer_member_id
+      ? settleViaHub(nets, view.organizer_member_id)
+      : settle(nets);
   const visibleTransfers = seeAll ? transfers : transfers.filter((x) => x.from === myId || x.to === myId);
   const shareText = tournamentResultText(
     t,
@@ -81,8 +87,8 @@ export function ResultsView({ view, isAdmin, myId, run }: { view: TournamentView
 
       <section>
         <div className="mb-2 flex items-center justify-between px-1">
-          <h2 className="text-sm font-bold text-muted">מי מעביר למי</h2>
-          {view.organizer_member_id && (
+          <h2 className="text-sm font-bold text-muted">{upfront ? "המארגן משלם את הפרסים" : "מי מעביר למי"}</h2>
+          {view.organizer_member_id && !upfront && (
             <div className="flex gap-1 rounded-xl bg-surface-2 p-1 text-xs font-bold">
               <button className={`rounded-lg px-2 py-1 ${mode === "players" ? "bg-gold text-[#1d1405]" : "text-muted"}`} onClick={() => setMode("players")}>
                 בין השחקנים
@@ -95,7 +101,7 @@ export function ResultsView({ view, isAdmin, myId, run }: { view: TournamentView
         </div>
         <Card className="space-y-2">
           {visibleTransfers.length === 0 ? (
-            <p className="text-center text-sm text-muted">אין העברות.</p>
+            <p className="text-center text-sm text-muted">{upfront ? "כולם שילמו בכניסה. אין העברות." : "אין העברות."}</p>
           ) : (
             visibleTransfers.map((x, i) => (
               <div key={i} className="flex items-center gap-2 text-sm">

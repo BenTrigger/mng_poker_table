@@ -115,4 +115,10 @@ select tests.throws(format($$ insert into night_players (night_id, member_id) va
   (select id from table_members where table_id = tests.id('table') and display_name = 'g9')), '%table is full%', 'the 11th player is refused');
 reset role;
 
+-- payment mode and a rebuy deadline by clock time, chosen at setup
+select tests.login('admin');
+select tests.eq(tests.affected(format($$ update tournaments set payment_mode = 'upfront', rebuy_until_time = now() + interval '2 hours' where id = %L $$, tests.id('t'))), 1, 'admin sets cash at the door and a rebuy time');
+select tests.throws(format($$ update tournaments set payment_mode = 'later' where id = %L $$, tests.id('t')), '%check%', 'unknown payment mode is refused');
+reset role;
+
 rollback;

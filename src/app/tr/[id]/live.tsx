@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, SkipBack, SkipForward, Skull, Repeat, PlusCircle, ArrowLeftRight, Shuffle, Flag, UserPlus, Undo2, Coffee, Lock, LockOpen } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import {
-  anchorFor, balanceMoves, blindsLabel, chipsInPlay, mmss, prizePool, prizes, standings, togglePause, type ClockState,
+  anchorFor, balanceMoves, rebuyLabel, rebuyOpenAt, blindsLabel, chipsInPlay, mmss, prizePool, prizes, standings, togglePause, type ClockState,
 } from "@/lib/tournament";
 import { formatMoney } from "@/lib/calc";
 import { PokerTable, type Seat } from "@/components/poker-table";
@@ -55,7 +55,7 @@ export function LiveView({
   const avg = playing.length ? Math.round(chipsInPlay(t, played) / playing.length) : 0;
   const pays = prizes(pool, played.length);
   const order = standings(entries);
-  const rebuyOpen = t.rebuy_until_level > 0 && clock.levelNo <= t.rebuy_until_level;
+  const rebuyOpen = rebuyOpenAt(t, clock.levelNo, now);
   const moves = useMemo(() => balanceMoves(entries, t.table_count, t.seats_per_table), [entries, t.table_count, t.seats_per_table]);
   const name = (id: string | null) => entries.find((e) => e.id === id || e.member_id === id)?.display_name ?? "";
 
@@ -149,7 +149,7 @@ export function LiveView({
         <Stat label="קופת פרסים" value={formatMoney(pool)} />
       </div>
       <div className="flex flex-wrap justify-center gap-1.5">
-        {rebuyOpen && <Badge tone="win">ריביי פתוח עד סוף שלב {t.rebuy_until_level}</Badge>}
+        {rebuyOpen && <Badge tone="win">{rebuyLabel(t)}</Badge>}
         {t.registration_open && <Badge tone="win">הרשמה מאוחרת פתוחה{t.late_reg_until_level ? ` עד סוף שלב ${t.late_reg_until_level}` : ""}</Badge>}
       </div>
 

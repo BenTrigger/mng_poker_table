@@ -216,6 +216,10 @@ export type Tournament = {
   buy_in: number;
   starting_stack: number;
   rebuy_until_level: number;
+  /** rebuys allowed until this clock time (null = by level only) */
+  rebuy_until_time: string | null;
+  /** 'upfront' = cash paid to the organizer as you go; 'end' = settle at the end */
+  payment_mode: "upfront" | "end";
   rebuy_price: number | null;
   rebuy_chips: number | null;
   addon_price: number | null;
