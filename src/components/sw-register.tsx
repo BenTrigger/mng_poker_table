@@ -1,6 +1,8 @@
 "use client";
 import { useEffect } from "react";
 import { APP_BUILD } from "@/lib/changelog";
+// loaded with the layout so the one-time install prompt event is never missed
+import "@/lib/install-prompt";
 
 export function SwRegister() {
   useEffect(() => {

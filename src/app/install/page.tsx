@@ -5,26 +5,22 @@ import { Download, Share, PlusSquare, Smartphone, Check, MoreVertical } from "lu
 import { Button, Card } from "@/components/ui";
 import { TopBar } from "@/components/top-bar";
 import { APP_VERSION } from "@/lib/changelog";
-
-type BIPEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+import { detectPlatform, getInstallPrompt, isInstalled, promptInstall, subscribeInstall } from "@/lib/install-prompt";
 
 export default function InstallPage() {
   const [platform, setPlatform] = useState<"ios" | "android" | "desktop">("desktop");
-  const [prompt, setPrompt] = useState<BIPEvent | null>(null);
+  const [canPrompt, setCanPrompt] = useState(false);
   const [installed, setInstalled] = useState(false);
   const apk = process.env.NEXT_PUBLIC_APK_URL;
 
   useEffect(() => {
-    const ua = navigator.userAgent;
-    setPlatform(/iPhone|iPad|iPod/i.test(ua) ? "ios" : /Android/i.test(ua) ? "android" : "desktop");
-    setInstalled(window.matchMedia("(display-mode: standalone)").matches);
-    const h = (e: Event) => {
-      e.preventDefault();
-      setPrompt(e as BIPEvent);
+    setPlatform(detectPlatform());
+    const sync = () => {
+      setCanPrompt(!!getInstallPrompt());
+      setInstalled(isInstalled());
     };
-    window.addEventListener("beforeinstallprompt", h);
-    window.addEventListener("appinstalled", () => setInstalled(true));
-    return () => window.removeEventListener("beforeinstallprompt", h);
+    sync();
+    return subscribeInstall(sync);
   }, []);
 
   return (
@@ -51,8 +47,8 @@ export default function InstallPage() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {prompt && (
-              <Button size="lg" className="w-full" onClick={() => prompt.prompt().then(() => setPrompt(null))}>
+            {canPrompt && (
+              <Button size="lg" className="w-full" onClick={() => promptInstall()}>
                 <Download className="size-5" /> התקנה בלחיצה
               </Button>
             )}
@@ -63,7 +59,7 @@ export default function InstallPage() {
                 </Button>
               </a>
             )}
-            {!prompt && (
+            {!canPrompt && (
               <Card className="space-y-3">
                 <div className="font-bold">{platform === "android" ? "באנדרואיד (Chrome):" : "במחשב (Chrome / Edge):"}</div>
                 <Step n={1} icon={<MoreVertical className="size-4" />} text={platform === "android" ? "פתח את התפריט (שלוש נקודות)" : "לחץ על סמל ההתקנה בשורת הכתובת"} />

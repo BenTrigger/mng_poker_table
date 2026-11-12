@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { HandCoins, ListChecks, Flag } from "lucide-react";
 import { PokerTable, type Seat } from "@/components/poker-table";
 import { TopBar } from "@/components/top-bar";
+import { InstallBanner } from "@/components/install-banner";
 import { Avatar, Badge, Button, Card } from "@/components/ui";
 import { Summary, EventFeed } from "../t/[code]/n/[nightId]/sheets";
 import { HandoverSheet } from "../t/[code]/n/[nightId]/handover";
@@ -106,13 +107,16 @@ export default function Preview() {
         )}
       </main>
       {!closed && (
-        <div className="glass fixed inset-x-0 bottom-0 z-30 border-t border-line p-3">
+        <div className="glass fixed inset-x-0 bottom-0 z-30 border-t border-line pb-3">
+          <InstallBanner />
+          <div className="px-3 pt-3">
           <div className="mx-auto flex max-w-lg gap-2">
             <Button size="lg" className="flex-1"><HandCoins className="size-5" /> בקשת צ'יפים</Button>
             <Button size="lg" variant="soft" className="relative"><ListChecks className="size-5" /> קופה
               <span className="pulse-ring absolute -left-1 -top-1 grid size-6 place-items-center rounded-full bg-gold text-xs font-extrabold text-[#1d1405]">1</span>
             </Button>
             <Button size="lg" variant="soft"><Flag className="size-5" /></Button>
+          </div>
           </div>
         </div>
       )}

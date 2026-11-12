@@ -31,7 +31,3 @@ OAuth consent screen: App name "All In" → **Publish app**.
 ### בדיקה
 - `https://pokertable.realizeaisolutions.com/api/version`
 - כניסה עם Google, יצירת שולחן, פתיחת ערב.
-
-## חלופה: Cloudflare Workers
-
-הפרויקט נבנה גם ל-Cloudflare (`wrangler.jsonc`, `npm run deploy`, ו-`.github/workflows/deploy.yml` שרץ ידנית).

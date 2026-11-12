@@ -540,41 +540,86 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "wi
 // Admin: change cashier, add a player mid-night
 // ---------------------------------------------------------------------------
 export function AdminSheet({
-  open, onClose, night, players, members, onHandover,
+  open, onClose, night, players, members, requests = [], onHandover, onCashout,
 }: {
-  open: boolean; onClose: () => void; night: GameNight; players: NightPlayer[]; members: Member[]; onHandover: () => void;
+  open: boolean; onClose: () => void; night: GameNight; players: NightPlayer[]; members: Member[]; requests?: ChipRequest[];
+  onHandover: () => void; onCashout: (memberId: string) => void;
 }) {
   const outside = members.filter((m) => m.status === "active" && !players.some((p) => p.member_id === m.id));
-  const [quick, setQuick] = useState(false);
+  const playing = players.filter((p) => p.status === "playing");
+  const [guest, setGuest] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState("");
+  const hasCashier = !!night.cashier_member_id;
 
-  async function setCashier(id: string) {
-    await supabase().from("game_nights").update({ cashier_member_id: id }).eq("id", night.id);
-    await logEvent(night.id, "cashier_changed", { member_id: id });
-    onClose();
+  async function run(key: string, f: () => Promise<void>) {
+    setBusy(key);
+    setErr("");
+    try {
+      await f();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : (e as { message?: string })?.message;
+      setErr(msg?.includes("table is full") ? "השולחן מלא (עד 10 שחקנים)." : msg || "משהו השתבש, נסה שוב");
+    } finally {
+      setBusy(null);
+    }
   }
-  const seated = players.filter((p) => p.status === "playing").length;
-  async function addPlayer(id: string) {
-    const { error } = await supabase().from("night_players").insert({ night_id: night.id, member_id: id, seat: players.length });
-    if (error) return alert(error.message.includes("table is full") ? "השולחן מלא (עד 10 שחקנים)." : error.message);
-    await logEvent(night.id, "player_added", { member_id: id });
+  const nextSeat = () => Math.max(-1, ...players.map((p) => p.seat)) + 1;
+
+  const setCashier = (id: string) =>
+    run(`cashier:${id}`, async () => {
+      const { error } = await supabase().from("game_nights").update({ cashier_member_id: id }).eq("id", night.id);
+      if (error) throw error;
+      await logEvent(night.id, "cashier_changed", { member_id: id });
+    });
+  async function seat(memberId: string) {
+    const { error } = await supabase().from("night_players").insert({ night_id: night.id, member_id: memberId, seat: nextSeat() });
+    if (error) throw error;
+    await logEvent(night.id, "player_added", { member_id: memberId });
   }
+  const addPlayer = (id: string) => run(`add:${id}`, () => seat(id));
+  const addGuest = () =>
+    run("guest", async () => {
+      const name = guest.trim();
+      if (!name) return;
+      const { data, error } = await supabase().from("table_members").insert({ table_id: night.table_id, display_name: name }).select().single();
+      if (error) throw error;
+      await seat(data.id);
+      setGuest("");
+    });
+  // A player who already got chips leaves through a cash-out, so the night stays balanced.
+  // One who got nothing yet (added by mistake, never sat down) is simply taken off.
+  const remove = (p: NightPlayer) =>
+    run(`remove:${p.member_id}`, async () => {
+      const mine = requests.filter((r) => r.member_id === p.member_id);
+      if (mine.some((r) => r.status === "approved" || r.status === "flagged")) {
+        onCashout(p.member_id);
+        return;
+      }
+      const pendingIds = mine.filter((r) => r.status === "pending").map((r) => r.id);
+      if (pendingIds.length) await supabase().from("chip_requests").update({ status: "rejected" }).in("id", pendingIds);
+      const { error } = await supabase().from("night_players").delete().eq("id", p.id);
+      if (error) throw error;
+      await logEvent(night.id, "player_removed", { member_id: p.member_id });
+    });
+  const bought = (memberId: string) => requests.some((r) => r.member_id === memberId && (r.status === "approved" || r.status === "flagged"));
 
   return (
     <Sheet open={open} onClose={onClose} title="ניהול הערב">
-      <div className="space-y-5">
+      <div className="space-y-6">
         <section>
-          <h3 className="mb-2 text-sm font-bold text-muted">החלפת קופאי</h3>
-          <Button className="w-full" onClick={onHandover}>
-            <ArrowLeftRight className="size-4" /> הקופאי עוזב: ספירה והעברת הקופה
-          </Button>
-          <button className="mt-2 text-xs text-muted underline" onClick={() => setQuick((q) => !q)}>
-            {quick ? "הסתר" : "רק לתקן מי הקופאי, בלי ספירה"}
-          </button>
-          {quick && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {players.map((p) => (
+          <h3 className="mb-2 text-sm font-bold text-muted">{hasCashier ? "קופאי" : "מינוי קופאי"}</h3>
+          {hasCashier && (
+            <Button className="mb-3 w-full" onClick={onHandover}>
+              <ArrowLeftRight className="size-4" /> העברת הקופה לקופאי אחר (עם ספירה)
+            </Button>
+          )}
+          <p className="mb-2 text-xs text-muted">{hasCashier ? "או מינוי מהיר בלי ספירת קופה:" : "בחר מי מחזיק את הקופה הערב:"}</p>
+          <div className="flex flex-wrap gap-2">
+            {playing.map((p) => (
               <button
                 key={p.member_id}
+                disabled={!!busy}
                 onClick={() => setCashier(p.member_id)}
                 className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-bold ${night.cashier_member_id === p.member_id ? "bg-gold text-[#1d1405]" : "bg-surface-2"}`}
               >
@@ -582,25 +627,63 @@ export function AdminSheet({
               </button>
             ))}
           </div>
-          )}
         </section>
-        {outside.length > 0 && seated >= 10 && <p className="text-sm text-muted">השולחן מלא (10 שחקנים). שחקן חדש נכנס כשמישהו קם.</p>}
-        {outside.length > 0 && seated < 10 && (
-          <section>
-            <h3 className="mb-2 text-sm font-bold text-muted">הוספת שחקן לערב</h3>
-            <div className="space-y-2">
+
+        <section>
+          <h3 className="mb-2 text-sm font-bold text-muted">שחקנים בערב</h3>
+          <div className="space-y-2">
+            {playing.map((p) => {
+              const m = members.find((x) => x.id === p.member_id);
+              const isCashier = night.cashier_member_id === p.member_id;
+              return (
+                <div key={p.member_id} className="flex items-center gap-3">
+                  <Avatar name={m?.display_name ?? "?"} src={m?.avatar_url} size={34} />
+                  <span className="flex-1 font-bold">
+                    {m?.display_name ?? "?"} {isCashier && <Landmark className="inline size-3.5 text-gold" />}
+                  </span>
+                  {isCashier ? (
+                    <span className="text-xs text-muted">קודם ממנים קופאי אחר</span>
+                  ) : (
+                    <Button size="sm" variant="soft" loading={busy === `remove:${p.member_id}`} disabled={!!busy} onClick={() => remove(p)}>
+                      {bought(p.member_id) ? <LogOut className="size-4" /> : <Trash2 className="size-4" />}
+                      {bought(p.member_id) ? "יציאה ופדיון" : "הסרה"}
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section>
+          <h3 className="mb-2 text-sm font-bold text-muted">הוספת שחקן באמצע הערב</h3>
+          {playing.length >= 10 ? (
+            <p className="text-sm text-muted">השולחן מלא (10 שחקנים). שחקן חדש נכנס כשמישהו קם.</p>
+          ) : (
+          <>
+          {outside.length > 0 && (
+            <div className="mb-3 space-y-2">
               {outside.map((m) => (
                 <div key={m.id} className="flex items-center gap-3">
                   <Avatar name={m.display_name} src={m.avatar_url} size={34} />
                   <span className="flex-1 font-bold">{m.display_name}</span>
-                  <Button size="sm" variant="soft" onClick={() => addPlayer(m.id)}>
+                  <Button size="sm" variant="soft" loading={busy === `add:${m.id}`} disabled={!!busy} onClick={() => addPlayer(m.id)}>
                     <UserPlus className="size-4" /> הוספה
                   </Button>
                 </div>
               ))}
             </div>
-          </section>
-        )}
+          )}
+          <div className="flex gap-2">
+            <input className={`${inputCls} h-11`} placeholder="שחקן חדש (שם)" value={guest} onChange={(e) => setGuest(e.target.value)} />
+            <Button size="md" variant="soft" loading={busy === "guest"} disabled={!guest.trim() || !!busy} onClick={addGuest}>
+              <UserPlus className="size-4" /> הוספה
+            </Button>
+          </div>
+          </>
+          )}
+        </section>
+        {err && <p className="text-sm text-loss">{err}</p>}
       </div>
     </Sheet>
   );
@@ -916,6 +999,7 @@ const EVENT_TEXT: Record<string, (p: Record<string, unknown>, n: (id: unknown) =
     return `החלפת קופאי: ${p.from ? n(p.from) : "—"} ← ${n(p.to)}${p.left ? " (עזב את המשחק)" : ""} · ${check}${bank}`;
   },
   player_added: (p, n) => `${n(p.member_id)} הצטרף לערב`,
+  player_removed: (p, n) => `${n(p.member_id)} הוסר מהערב`,
   night_closed: () => `הערב נסגר`,
 };
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 // Digital Asset Links for the Android app (TWA), so it opens full screen
 // without a browser bar. Set ANDROID_CERT_SHA256 (colon separated) in the
-// Cloudflare environment once the APK signing key exists.
+// Vercel environment once the APK signing key exists.
 export const dynamic = "force-dynamic";
 
 export function GET() {
