@@ -4,9 +4,9 @@
 #   3. build + deploy -> Cloudflare Workers at pokertable.realizeaisolution.com
 # Required repository secrets are listed in docs/DEPLOY.md.
 name: Deploy
+# Optional: fully scripted deploy. Run manually (Actions -> Deploy) once its
+# secrets exist. The default path is Cloudflare's own Git integration.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
