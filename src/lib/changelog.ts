@@ -6,6 +6,12 @@ export type Release = { version: string; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.13.1",
+    date: "2026-11-12",
+    title: "תיקון התראות לטלפון",
+    items: ["הפעלת התראות לטלפון עובדת עכשיו גם באתר החי (החיבור לשרת ההתראות נכשל)"],
+  },
+  {
     version: "1.13.0",
     date: "2026-11-12",
     title: "התראות",

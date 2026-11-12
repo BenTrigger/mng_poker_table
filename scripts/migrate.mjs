@@ -41,7 +41,15 @@ if (dup) {
 
 const local = /@(localhost|127\.0\.0\.1)[:/]|host=\/|^postgres:\/\/\/?[^@]*$/.test(url);
 const client = new pg.Client({
-  connectionString: url.replace(/[?&]sslmode=[^&]*/g, ""),
+  connectionString: (() => {
+    try {
+      const u = new URL(url);
+      u.searchParams.delete("sslmode");
+      return u.toString();
+    } catch {
+      return url;
+    }
+  })(),
   ssl: local ? false : { rejectUnauthorized: false },
 });
 
