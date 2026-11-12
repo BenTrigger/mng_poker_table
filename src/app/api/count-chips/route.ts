@@ -58,7 +58,7 @@ export async function POST(req: Request) {
               text:
                 `This photo shows one or more stacks of poker chips, usually photographed from the side.\n` +
                 `Count how many chips of each colour are in the photo. The chip set has these colours:\n${palette}\n\n` +
-                `Count edge stripes carefully, stack by stack. Use exactly the colour names above in "counts", ` +
+                `Stacks are often lined up side by side in a row. Count edge stripes carefully, stack by stack, then add them up. Use exactly the colour names above in "counts", ` +
                 `one entry per colour (count 0 if absent). Set confidence to "low" if chips are hidden, blurry, ` +
                 `or colours are hard to tell apart, and explain briefly in "notes" (in Hebrew).`,
             },

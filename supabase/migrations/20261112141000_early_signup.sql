@@ -207,3 +207,11 @@ begin
   update signups set seats = p_seats where id = p_signup;
   perform signup_fill_seats(p_signup);
 end $$;
+
+-- Only signed-in users may call these (same rule as the other app functions)
+revoke execute on function public.get_signup(uuid), public.claim_seat(uuid, int), public.leave_signup(uuid),
+  public.admin_seat(uuid, uuid, int), public.resize_signup(uuid, int)
+  from public, anon;
+grant execute on function public.get_signup(uuid), public.claim_seat(uuid, int), public.leave_signup(uuid),
+  public.admin_seat(uuid, uuid, int), public.resize_signup(uuid, int)
+  to authenticated;

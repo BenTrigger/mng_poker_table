@@ -1,21 +1,21 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Check, X, AlertTriangle, Pencil, Share2, Landmark, UserPlus, LogOut, ImageIcon, Sparkles, Trash2 } from "lucide-react";
+import { Camera, Check, X, AlertTriangle, Pencil, Share2, Landmark, UserPlus, LogOut, ImageIcon, Sparkles, Trash2, ArrowLeftRight } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { logEvent } from "@/lib/hooks";
-import { balanceNets, chipRate, chipsToMoney, formatMoney, formatSigned, moneyToChips, round2, settle, type PlayerLine } from "@/lib/calc";
+import { balanceNets, chipCheck, chipRate, chipsToMoney, formatMoney, formatSigned, moneyToChips, round2, settle, type PlayerLine } from "@/lib/calc";
 import { breakdown, chipCountingEnabled, countChipsFromPhoto } from "@/lib/chips";
 import { compressImage } from "@/lib/image";
-import type { ChipCount, ChipRequest, ChipSet, GameNight, Member, NightEvent, NightPlayer, Settlement } from "@/lib/types";
+import type { CashierHandover, ChipCount, ChipRequest, ChipSet, GameNight, Member, NightEvent, NightPlayer, Settlement } from "@/lib/types";
 import { Avatar, Badge, Button, Card, ChipDot, Field, Sheet, inputCls } from "@/components/ui";
 
-const nameOf = (members: Member[], id: string) => members.find((m) => m.id === id)?.display_name ?? "שחקן";
+export const nameOf = (members: Member[], id: string) => members.find((m) => m.id === id)?.display_name ?? "שחקן";
 
-async function myUid() {
+export async function myUid() {
   return (await supabase().auth.getUser()).data.user?.id ?? null;
 }
 
-async function uploadPhoto(nightId: string, name: string, blob: Blob) {
+export async function uploadPhoto(nightId: string, name: string, blob: Blob) {
   const path = `${nightId}/${name}-${Date.now()}.jpg`;
   const { error } = await supabase().storage.from("chip-photos").upload(path, blob, { contentType: "image/jpeg" });
   if (error) throw error;
@@ -31,7 +31,7 @@ function useSignedUrl(path: string | null) {
   return url;
 }
 
-function PhotoThumb({ path }: { path: string | null }) {
+export function PhotoThumb({ path }: { path: string | null }) {
   const url = useSignedUrl(path);
   if (!path) return null;
   return (
@@ -159,10 +159,10 @@ function Breakdown({ total, chipSet }: { total: number; chipSet: ChipSet }) {
 // ---------------------------------------------------------------------------
 // Chip counter: photo -> AI count (if configured) with manual override
 // ---------------------------------------------------------------------------
-function ChipCounter({
-  chipSet, expected, onDone, cta, busy,
+export function ChipCounter({
+  chipSet, expected, onDone, cta, busy, hint = "צלם את הערימה מהצד",
 }: {
-  chipSet: ChipSet | null; expected?: number; cta: string; busy?: boolean;
+  chipSet: ChipSet | null; expected?: number; cta: string; busy?: boolean; hint?: string;
   onDone: (r: { total: number; photo: Blob | null; detected: number | null; count: ChipCount | null; manual: boolean }) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -216,7 +216,7 @@ function ChipCounter({
       ) : (
         <button onClick={() => fileRef.current?.click()} className="flex h-32 w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gold/40 bg-gold/5 text-gold">
           <Camera className="size-8" />
-          <span className="text-sm font-bold">צלם את הערימה מהצד</span>
+          <span className="text-sm font-bold">{hint}</span>
           {aiOn && <span className="flex items-center gap-1 text-[11px] text-muted"><Sparkles className="size-3" /> אספור לפי צבעים</span>}
         </button>
       )}
@@ -266,9 +266,9 @@ function ChipCounter({
 // Cashier queue + handover with photo proof
 // ---------------------------------------------------------------------------
 export function CashierSheet({
-  open, onClose, night, requests, members, chipSet, isAdmin,
+  open, onClose, night, requests, members, chipSet, isAdmin, onHandover,
 }: {
-  open: boolean; onClose: () => void; night: GameNight; requests: ChipRequest[]; members: Member[]; chipSet: ChipSet | null; isAdmin: boolean;
+  open: boolean; onClose: () => void; night: GameNight; requests: ChipRequest[]; members: Member[]; chipSet: ChipSet | null; isAdmin: boolean; onHandover: () => void;
 }) {
   const rate = chipRate(night);
   const [active, setActive] = useState<ChipRequest | null>(null);
@@ -428,6 +428,9 @@ export function CashierSheet({
           ))}
         </div>
       )}
+      <Button variant="ghost" className="mt-4 w-full" onClick={onHandover}>
+        <ArrowLeftRight className="size-4" /> החלפת קופאי (ספירה והעברת הקופה)
+      </Button>
     </Sheet>
   );
 }
@@ -536,8 +539,13 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "wi
 // ---------------------------------------------------------------------------
 // Admin: change cashier, add a player mid-night
 // ---------------------------------------------------------------------------
-export function AdminSheet({ open, onClose, night, players, members }: { open: boolean; onClose: () => void; night: GameNight; players: NightPlayer[]; members: Member[] }) {
+export function AdminSheet({
+  open, onClose, night, players, members, onHandover,
+}: {
+  open: boolean; onClose: () => void; night: GameNight; players: NightPlayer[]; members: Member[]; onHandover: () => void;
+}) {
   const outside = members.filter((m) => m.status === "active" && !players.some((p) => p.member_id === m.id));
+  const [quick, setQuick] = useState(false);
 
   async function setCashier(id: string) {
     await supabase().from("game_nights").update({ cashier_member_id: id }).eq("id", night.id);
@@ -554,7 +562,14 @@ export function AdminSheet({ open, onClose, night, players, members }: { open: b
       <div className="space-y-5">
         <section>
           <h3 className="mb-2 text-sm font-bold text-muted">החלפת קופאי</h3>
-          <div className="flex flex-wrap gap-2">
+          <Button className="w-full" onClick={onHandover}>
+            <ArrowLeftRight className="size-4" /> הקופאי עוזב: ספירה והעברת הקופה
+          </Button>
+          <button className="mt-2 text-xs text-muted underline" onClick={() => setQuick((q) => !q)}>
+            {quick ? "הסתר" : "רק לתקן מי הקופאי, בלי ספירה"}
+          </button>
+          {quick && (
+          <div className="mt-2 flex flex-wrap gap-2">
             {players.map((p) => (
               <button
                 key={p.member_id}
@@ -565,6 +580,7 @@ export function AdminSheet({ open, onClose, night, players, members }: { open: b
               </button>
             ))}
           </div>
+          )}
         </section>
         {outside.length > 0 && (
           <section>
@@ -591,9 +607,9 @@ export function AdminSheet({ open, onClose, night, players, members }: { open: b
 // End of night: count everyone, check the gap, settle and close
 // ---------------------------------------------------------------------------
 export function CloseSheet({
-  open, onClose, night, players, lines, members, chipSet, pendingCount,
+  open, onClose, night, players, lines, members, chipSet, pendingCount, handovers = [],
 }: {
-  open: boolean; onClose: () => void; night: GameNight; players: NightPlayer[]; lines: PlayerLine[]; members: Member[]; chipSet: ChipSet | null; pendingCount: number;
+  open: boolean; onClose: () => void; night: GameNight; players: NightPlayer[]; lines: PlayerLine[]; members: Member[]; chipSet: ChipSet | null; pendingCount: number; handovers?: CashierHandover[];
 }) {
   const rate = chipRate(night);
   const playing = players.filter((p) => p.status === "playing");
@@ -602,10 +618,12 @@ export function CloseSheet({
   const [busy, setBusy] = useState(false);
 
   const allCounted = playing.every((p) => counts[p.member_id] != null);
-  const handed = lines.reduce((s, l) => s + l.boughtChips, 0);
-  const outChips = players.filter((p) => p.status === "out").reduce((s, p) => s + Number(p.final_chips ?? 0), 0);
-  const counted = outChips + Object.values(counts).reduce((s, c) => s + c.total, 0);
-  const gapChips = counted - handed;
+  const { handed, counted, gap: gapChips } = chipCheck(
+    lines,
+    players,
+    Object.fromEntries(Object.entries(counts).map(([id, c]) => [id, c.total])),
+  );
+  const handoverGaps = handovers.filter((h) => Number(h.gap_chips) !== 0);
 
   const preview = useMemo(() => {
     if (!allCounted) return null;
@@ -719,6 +737,17 @@ export function CloseSheet({
                 </div>
               )}
             </Card>
+            {handoverGaps.length > 0 && (
+              <div className="space-y-1 rounded-2xl bg-surface-2 p-3 text-xs text-muted">
+                {handoverGaps.map((h) => (
+                  <div key={h.id}>
+                    בהחלפת קופאי ({h.from_member ? nameOf(members, h.from_member) : "—"} ← {nameOf(members, h.to_member)}) נמצא{" "}
+                    {Number(h.gap_chips) > 0 ? "עודף" : "חוסר"} של {Math.abs(Number(h.gap_chips)).toLocaleString()} צ'יפים
+                    {h.note ? ` · ${h.note}` : ""}
+                  </div>
+                ))}
+              </div>
+            )}
             <Transfers transfers={preview.transfers} members={members} />
             <Button size="lg" className="w-full" loading={busy} onClick={finish}>
               <Check className="size-5" /> סגירה סופית
@@ -855,6 +884,12 @@ const EVENT_TEXT: Record<string, (p: Record<string, unknown>, n: (id: unknown) =
   cashout: (p, n) => `${n(p.member_id)} קם עם ${Number(p.chips).toLocaleString()} צ'יפים (${formatSigned(Number(p.net))})`,
   cashout_undone: (p, n) => `${n(p.member_id)} חזר לשחק`,
   cashier_changed: (p, n) => `${n(p.member_id)} הוא הקופאי עכשיו`,
+  cashier_handover: (p, n) => {
+    const gap = Number(p.gap);
+    const check = gap === 0 ? "הספירה מאוזנת" : `${gap > 0 ? "עודף" : "חוסר"} של ${Math.abs(gap).toLocaleString()} צ'יפים`;
+    const bank = p.bank != null ? ` · בקופה ${Number(p.bank).toLocaleString()}` : "";
+    return `החלפת קופאי: ${p.from ? n(p.from) : "—"} ← ${n(p.to)}${p.left ? " (עזב את המשחק)" : ""} · ${check}${bank}`;
+  },
   player_added: (p, n) => `${n(p.member_id)} הצטרף לערב`,
   night_closed: () => `הערב נסגר`,
 };

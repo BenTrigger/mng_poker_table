@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "./supabase/client";
 import type {
+  CashierHandover,
   ChipRequest, ChipSet, GameNight, Member, NightEvent, NightPlayer, PokerTable, Profile, Settlement,
 } from "./types";
 
@@ -97,23 +98,26 @@ export function useNight(nightId: string, enabled: boolean) {
   const [requests, setRequests] = useState<ChipRequest[]>([]);
   const [events, setEvents] = useState<NightEvent[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [handovers, setHandovers] = useState<CashierHandover[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (!enabled) return;
     const sb = supabase();
-    const [n, p, r, e, s] = await Promise.all([
+    const [n, p, r, e, s, h] = await Promise.all([
       sb.from("game_nights").select("*").eq("id", nightId).maybeSingle(),
       sb.from("night_players").select("*").eq("night_id", nightId).order("seat"),
       sb.from("chip_requests").select("*").eq("night_id", nightId).order("created_at"),
       sb.from("night_events").select("*").eq("night_id", nightId).order("created_at", { ascending: false }).limit(200),
       sb.from("settlements").select("*").eq("night_id", nightId),
+      sb.from("cashier_handovers").select("*").eq("night_id", nightId).order("created_at"),
     ]);
     setNight(n.data);
     setPlayers(p.data ?? []);
     setRequests(r.data ?? []);
     setEvents(e.data ?? []);
     setSettlements(s.data ?? []);
+    setHandovers(h.data ?? []);
     setLoading(false);
   }, [nightId, enabled]);
 
@@ -132,6 +136,7 @@ export function useNight(nightId: string, enabled: boolean) {
       .on("postgres_changes", { event: "*", schema: "public", table: "chip_requests", filter: f }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "night_events", filter: f }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "settlements", filter: f }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "cashier_handovers", filter: f }, load)
       .subscribe();
     // refresh when the app comes back to the foreground (phones suspend sockets)
     const vis = () => document.visibilityState === "visible" && load();
@@ -142,7 +147,7 @@ export function useNight(nightId: string, enabled: boolean) {
     };
   }, [nightId, enabled, load]);
 
-  return { night, players, requests, events, settlements, loading, reload: load };
+  return { night, players, requests, events, settlements, handovers, loading, reload: load };
 }
 
 export async function logEvent(nightId: string, kind: string, payload: Record<string, unknown> = {}) {

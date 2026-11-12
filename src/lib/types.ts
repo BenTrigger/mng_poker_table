@@ -113,6 +113,25 @@ export type ChipCount = {
   notes: string;
 };
 
+export type HandoverCount = { member_id: string; chips: number; detected: number | null; photo_path: string | null };
+
+export type CashierHandover = {
+  id: string;
+  night_id: string;
+  from_member: string | null;
+  to_member: string;
+  handed_chips: number;
+  counted_chips: number;
+  gap_chips: number;
+  bank_chips: number | null;
+  counts: HandoverCount[];
+  bank_photo_path: string | null;
+  outgoing_left: boolean;
+  note: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
 export type Signup = {
   id: string;
   table_id: string;

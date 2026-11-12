@@ -7,7 +7,9 @@ import { PokerTable, type Seat } from "@/components/poker-table";
 import { TopBar } from "@/components/top-bar";
 import { Avatar, Badge, Button, Card } from "@/components/ui";
 import { Summary, EventFeed } from "../t/[code]/n/[nightId]/sheets";
-import type { ChipRequest, GameNight, Member, NightPlayer, Settlement, NightEvent } from "@/lib/types";
+import { HandoverSheet } from "../t/[code]/n/[nightId]/handover";
+import type { ChipSet, ChipRequest, GameNight, Member, NightPlayer, Settlement, NightEvent } from "@/lib/types";
+import { DEFAULT_CHIPS } from "@/lib/chips";
 import { formatMoney, formatSigned, playerLines, settle } from "@/lib/calc";
 
 const names = ["בן", "אורי", "דניאל", "יוסי", "מיכל", "רון", "עידו", "שני"];
@@ -18,6 +20,7 @@ const night: GameNight = {
   id: "n", table_id: "t", status: "open", chip_set_id: null, chips_per_buyin: 1000, money_per_buyin: 100, cashier_member_id: "m1",
   created_by: null, started_at: new Date().toISOString(), closed_at: null, photos_purged: false,
 };
+const chipSet: ChipSet = { id: "cs", table_id: "t", name: "הערכה השחורה", created_at: "", chips: DEFAULT_CHIPS };
 const bought = [2000, 1000, 3000, 1000, 1500, 0, 2000, 1000];
 const finals = [3400, 0, 1200, 2600, 1500, 0, 1900, 900];
 const players: NightPlayer[] = members.map((m, i) => ({
@@ -33,8 +36,10 @@ const requests: ChipRequest[] = members.flatMap((m, i): ChipRequest[] =>
 export default function Preview() {
   if (process.env.NODE_ENV === "production") notFound();
   const [mode, setMode] = useState<"live" | "closed">("live");
+  const [handover, setHandover] = useState(false);
   useEffect(() => {
     if (location.hash === "#closed") setMode("closed");
+    if (location.hash === "#handover") setHandover(true);
   }, []);
   const lines = playerLines(night, players, requests);
   const closed = mode === "closed";
@@ -111,6 +116,7 @@ export default function Preview() {
           </div>
         </div>
       )}
+      <HandoverSheet open={handover} onClose={() => setHandover(false)} night={night} players={players} lines={lines} members={members} chipSet={chipSet} handovers={[]} />
       <button className="fixed left-3 top-20 z-40 rounded-full bg-black/60 px-3 py-1 text-xs" onClick={() => setMode(closed ? "live" : "closed")}>
         {closed ? "live" : "closed"}
       </button>

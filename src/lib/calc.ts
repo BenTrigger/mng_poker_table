@@ -66,6 +66,24 @@ export function playerLines(
   });
 }
 
+/**
+ * Chip check at a point in the night (cashier handover or close):
+ * chips handed out vs chips counted on the table plus chips of players who left.
+ * gap > 0 means more chips than recorded (surplus), gap < 0 means missing chips.
+ */
+export function chipCheck(
+  lines: Pick<PlayerLine, "boughtChips">[],
+  players: Pick<NightPlayer, "member_id" | "status" | "final_chips">[],
+  liveCounts: Record<string, number>,
+): { handed: number; counted: number; gap: number } {
+  const handed = lines.reduce((s, l) => s + l.boughtChips, 0);
+  const outChips = players
+    .filter((p) => p.status === "out" && liveCounts[p.member_id] == null)
+    .reduce((s, p) => s + Number(p.final_chips ?? 0), 0);
+  const counted = outChips + Object.values(liveCounts).reduce((s, c) => s + c, 0);
+  return { handed, counted, gap: counted - handed };
+}
+
 export type Transfer = { from: string; to: string; amount: number };
 
 /**
