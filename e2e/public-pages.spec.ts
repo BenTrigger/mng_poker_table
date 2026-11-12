@@ -109,3 +109,20 @@ test("unknown page shows 404", async ({ page }) => {
   const res = await page.goto("/no-such-page");
   expect(res?.status()).toBe(404);
 });
+
+test("push endpoints are safe without setup or sign-in", async ({ request }) => {
+  test.skip(!!process.env.BASE_URL, "local build only");
+  const key = await request.get("/api/push/key");
+  expect(key.ok()).toBeTruthy();
+  expect(await key.json()).toHaveProperty("key");
+  const t = await request.post("/api/push/test");
+  expect(t.status()).toBe(401); // never sends for a signed-out caller
+});
+
+test("service worker handles push and notification taps", async ({ request }) => {
+  const sw = await request.get("/sw.js");
+  expect(sw.ok()).toBeTruthy();
+  const src = await sw.text();
+  expect(src).toContain('addEventListener("push"');
+  expect(src).toContain('addEventListener("notificationclick"');
+});

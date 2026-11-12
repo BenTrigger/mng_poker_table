@@ -9,6 +9,8 @@ const build =
   new Date().toISOString().replace(/[-:T]/g, "").slice(0, 12);
 
 const nextConfig: NextConfig = {
+  // web-push is plain Node (crypto, https); load it as is on the server
+  serverExternalPackages: ["web-push"],
   env: {
     NEXT_PUBLIC_APP_VERSION: pkg.version,
     NEXT_PUBLIC_APP_BUILD: build,

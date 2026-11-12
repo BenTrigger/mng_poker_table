@@ -2,8 +2,9 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { Avatar } from "./ui";
+import { NotificationBell } from "./notification-bell";
 
-export function TopBar({ title, back, sub, avatar, right }: { title: string; back?: string; sub?: string; avatar?: { name: string; src?: string | null }; right?: React.ReactNode }) {
+export function TopBar({ title, back, sub, avatar, right, bell = true }: { title: string; back?: string; sub?: string; avatar?: { name: string; src?: string | null }; right?: React.ReactNode; bell?: boolean }) {
   return (
     <header className="glass sticky top-0 z-30 border-b border-line px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
       <div className="mx-auto flex max-w-lg items-center gap-3">
@@ -17,6 +18,7 @@ export function TopBar({ title, back, sub, avatar, right }: { title: string; bac
           {sub && <div className="truncate text-xs text-muted">{sub}</div>}
         </div>
         {right}
+        {bell && <NotificationBell />}
         {avatar && <Avatar name={avatar.name} src={avatar.src} size={34} />}
       </div>
     </header>
