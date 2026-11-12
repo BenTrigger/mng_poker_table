@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/hooks";
 import { TopBar } from "@/components/top-bar";
 import { Button, Card, Empty, Field, Sheet, Spinner, Badge, inputCls } from "@/components/ui";
 import type { Member, PokerTable } from "@/lib/types";
+import { VersionLabel } from "@/components/version-label";
 
 type Row = Member & { poker_tables: PokerTable };
 
@@ -100,6 +101,7 @@ export default function TablesPage() {
             </Link>
           ))
         )}
+        <VersionLabel />
       </main>
 
       <Sheet open={createOpen} onClose={() => setCreateOpen(false)} title="שולחן חדש">

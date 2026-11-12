@@ -2,7 +2,7 @@
 
 אפליקציית WEB + PWA לניהול ערבי פוקר: שולחן עם קוד קבוע, קופאי לכל ערב, בקשות צ'יפים עם צילום הוכחה, ספירת צ'יפים מתמונה לפי צבעים, סיכום "מי חייב למי" עם שיתוף לוואטסאפ, וסטטיסטיקות לאורך זמן.
 
-**Stack:** Next.js 15 (App Router) · Supabase (Postgres, Google Auth, Realtime, Storage) · Tailwind 4 · Claude vision לספירת צ'יפים.
+**Stack:** Next.js 15 (App Router) על Cloudflare Workers · Supabase (Postgres, Google Auth, Realtime, Storage) · Tailwind 4 · Claude vision לספירת צ'יפים.
 
 ## מה יש בגרסה הזו
 
@@ -22,13 +22,19 @@
 - **סטטיסטיקות:** טבלת שולחן, סה"כ וממוצע לערב, ערב הכי טוב, אחוז ניצחונות, גרף רווח מצטבר, ותארים (מוביל, ערב השיא, מלך הריביי).
 - **PWA:** ניתן להתקנה למסך הבית (manifest + service worker).
 
+## העלאה, עדכונים ואנדרואיד
+
+- [docs/DEPLOY.md](docs/DEPLOY.md): Supabase, Google ו-Cloudflare בדומיין pokertable.realizeaisolution.com
+- [docs/RELEASING.md](docs/RELEASING.md): איך משחררים גרסה, ומה המשתמשים רואים
+- [docs/ANDROID.md](docs/ANDROID.md): בניית APK
+
 ## הקמה (פעם אחת)
 
 1. **Supabase:** צור פרויקט ב-[supabase.com](https://supabase.com). ב-SQL Editor הרץ את `supabase/migrations/0001_init.sql`.
 2. **Google login:** ב-Google Cloud Console צור OAuth Client (Web). ב-Authorized redirect URIs הוסף `https://YOUR-PROJECT.supabase.co/auth/v1/callback`. ב-Supabase: Authentication → Providers → Google, הדבק Client ID ו-Secret. ב-Authentication → URL Configuration הוסף את כתובת האתר שלך (ו-`http://localhost:3000` לפיתוח) ל-Redirect URLs.
 3. **משתני סביבה:** העתק `.env.example` ל-`.env.local` ומלא. `ANTHROPIC_API_KEY` אופציונלי: בלעדיו הכל עובד וספירת הצ'יפים ידנית.
 4. **הרצה מקומית:** `npm install` ואז `npm run dev`.
-5. **פריסה:** חבר את הריפו ל-[Vercel](https://vercel.com), הגדר את אותם משתני סביבה, וזהו.
+5. **פריסה:** ל-Cloudflare, לפי [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## APK לאנדרואיד (בהמשך)
 

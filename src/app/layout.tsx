@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { SwRegister } from "@/components/sw-register";
+import { UpdateWatcher } from "@/components/update-watcher";
 
 export const metadata: Metadata = {
   title: "All In · ניהול שולחן פוקר",
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased">
         {children}
         <SwRegister />
+        <UpdateWatcher />
       </body>
     </html>
   );

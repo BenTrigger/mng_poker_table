@@ -86,3 +86,16 @@ describe("balanceNets with fixed players", () => {
     expect(out[0].net).toBe(60);
   });
 });
+
+import { compareVersions, releasesSince, CHANGELOG } from "../changelog";
+describe("versions", () => {
+  it("compares semver", () => {
+    expect(compareVersions("1.2.0", "1.10.0")).toBe(-1);
+    expect(compareVersions("2.0.0", "1.9.9")).toBe(1);
+    expect(compareVersions("1.0.0", "1.0.0")).toBe(0);
+  });
+  it("changelog is newest first and releasesSince filters", () => {
+    for (let i = 1; i < CHANGELOG.length; i++) expect(compareVersions(CHANGELOG[i - 1].version, CHANGELOG[i].version)).toBe(1);
+    expect(releasesSince(CHANGELOG[0].version)).toEqual([]);
+  });
+});

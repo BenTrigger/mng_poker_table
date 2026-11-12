@@ -1,6 +1,6 @@
 // Minimal service worker: caches the app shell so the PWA opens fast and
 // installs cleanly. Data always comes from the network (it is live).
-const CACHE = "allin-v1";
+const CACHE = "allin-" + (new URL(self.location).searchParams.get("v") || "v1");
 const SHELL = ["/tables", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
