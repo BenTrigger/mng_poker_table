@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/hooks";
 import { PokerTable, type Seat } from "@/components/poker-table";
 import { TopBar } from "@/components/top-bar";
 import { PlaceInfo } from "@/components/place";
+import { useGeocode } from "@/lib/waze";
 import { Avatar, Badge, Button, Card, Empty, Field, Sheet, Spinner, Toast, inputCls } from "@/components/ui";
 import { seatMap, signupDate, signupError, signupLink, signupShareText, signupTime, useSignup, waitingList, whatsappUrl } from "@/lib/signup";
 import type { Member, SignupSeat } from "@/lib/types";
@@ -32,6 +33,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { view, loading, notFound, reload } = useSignup(id, !!user);
+  const at = useGeocode(view?.signup.address);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; tone?: "gold" | "loss" } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -82,7 +84,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
   const canLeave = !!mine && (s.status === "open" || s.status === "closed");
   const askLeave = () => confirm(mine?.seat ? `לבטל את הכיסא שלך (מקום ${mine.seat})?` : "לצאת מרשימת ההמתנה?") && leave();
   const link = signupLink(location.origin, s.id);
-  const shareText = signupShareText(table.name, s, seats, link);
+  const shareText = signupShareText(table.name, s, seats, link, at);
 
   async function run(key: string, fn: () => PromiseLike<{ error: { message: string } | null }>, ok?: string) {
     setBusy(key);
@@ -160,7 +162,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
               <CalendarClock className="size-4" /> <span className="num">{signupTime(s.starts_at)}</span>
             </span>
           </div>
-          <PlaceInfo host={s.location} address={s.address} />
+          <PlaceInfo host={s.location} address={s.address} at={at} />
           {s.note && <p className="text-sm">{s.note}</p>}
         </Card>
 

@@ -26,7 +26,7 @@ describe("early sign-up", () => {
     expect(text).toContain("ערב פוקר - החבר'ה");
     expect(text).toContain("מארח: אצל יוסי");
     expect(text).toContain("📍 הרצל 10, תל אביב");
-    expect(text).toContain("https://waze.com/ul?q=");
+    expect(text).toContain("https://www.waze.com/ul?q=");
     expect(text).toContain("רשומים (2/4):");
     expect(text).toContain("1. דנה");
     expect(text).toContain("3. רון");
