@@ -6,6 +6,15 @@ export type Release = { version: string; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.7.1",
+    date: "2026-11-12",
+    title: "התקנה ישירה באנדרואיד",
+    items: [
+      "באנדרואיד הלחיצה על \"התקנה\" מנסה מיד להתקין, וההדרכה מופיעה רק אם זה לא הצליח",
+      "האפליקציה תופסת את הצעת ההתקנה של הדפדפן כבר בטעינה הראשונה, כדי שלא תפוספס",
+    ],
+  },
+  {
     version: "1.7.0",
     date: "2026-11-12",
     title: "מארח, כתובת וניווט בוויז 🚗",

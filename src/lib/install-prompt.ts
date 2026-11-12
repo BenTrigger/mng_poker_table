@@ -11,7 +11,13 @@ let installed = false;
 const subs = new Set<() => void>();
 const emit = () => subs.forEach((f) => f());
 
+type EarlyWindow = Window & { __bip?: BIPEvent | null };
+
 if (typeof window !== "undefined") {
+  // An inline script in <head> (see layout) catches the event even if it fires
+  // before this bundle has loaded.
+  const early = (window as EarlyWindow).__bip;
+  if (early) deferred = early;
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     deferred = e as BIPEvent;
@@ -32,15 +38,42 @@ export function subscribeInstall(f: () => void) {
 }
 export const getInstallPrompt = () => deferred;
 
-/** Shows the native install dialog. Resolves true if the user accepted. */
-export async function promptInstall() {
-  const e = deferred;
-  if (!e) return false;
-  await e.prompt();
-  const { outcome } = await e.userChoice.catch(() => ({ outcome: "dismissed" }));
-  deferred = null;
-  emit();
-  return outcome === "accepted";
+/** Waits up to `ms` for the browser to offer an install prompt (it can arrive a moment after load). */
+export function waitForInstallPrompt(ms = 2500): Promise<BIPEvent | null> {
+  if (deferred) return Promise.resolve(deferred);
+  return new Promise((resolve) => {
+    const t = setTimeout(() => {
+      off();
+      resolve(deferred);
+    }, ms);
+    const off = subscribeInstall(() => {
+      if (!deferred) return;
+      clearTimeout(t);
+      off();
+      resolve(deferred);
+    });
+  });
+}
+
+/**
+ * Tries the browser's own install dialog.
+ * "accepted" = installing, "dismissed" = the user closed it, "unavailable" = the browser offers no install.
+ */
+export async function promptInstall(): Promise<"accepted" | "dismissed" | "unavailable"> {
+  const e = await waitForInstallPrompt();
+  if (!e) return "unavailable";
+  try {
+    await e.prompt();
+    const { outcome } = await e.userChoice;
+    return outcome === "accepted" ? "accepted" : "dismissed";
+  } catch {
+    return "unavailable";
+  } finally {
+    // a prompt can be shown only once
+    deferred = null;
+    (window as EarlyWindow).__bip = null;
+    emit();
+  }
 }
 
 export function detectPlatform(ua = navigator.userAgent): Platform {
