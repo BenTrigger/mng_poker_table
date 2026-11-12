@@ -94,6 +94,8 @@ export type NightPlayer = {
   left_at: string | null;
   bought_money: number | null;
   net: number | null;
+  /** set once the player is at the table (they confirmed, or the admin/cashier marked them) */
+  arrived_at?: string | null;
 };
 
 export type ChipRequest = {
