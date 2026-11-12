@@ -24,7 +24,7 @@ OAuth consent screen: App name "All In" → **Publish app**.
 2. Environment Variables (אם חיברת את Supabase דרך ה-Integration של Vercel הן כבר קיימות):
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `ANTHROPIC_API_KEY` (אופציונלי, לספירת צ'יפים מתמונה)
+   - `ANTHROPIC_API_KEY` (אופציונלי, לספירת צ'יפים מתמונה). משמש גם ללימוד ערכה מתמונות. מכסה יומית לשולחן: 100 ספירות ו-20 לימודים (`public.use_ai`)
 3. Deploy.
 4. Settings → Domains → `pokertable.realizeaisolutions.com`. Vercel יציג רשומת DNS אחת (CNAME ל-`cname.vercel-dns.com`). מוסיפים אותה ב-Cloudflare DNS של realizeaisolutions.com עם **DNS only** (ענן אפור).
 
