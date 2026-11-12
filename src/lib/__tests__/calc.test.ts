@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { settle, chipCheck, playerLines, balanceNets, chipSetTotal, memberStats, chipRate } from "../calc";
+import { settle, chipCheck, playerLines, balanceNets, chipSetTotal, memberStats, chipRate, settleViaHub } from "../calc";
 import type { ChipRequest, NightPlayer } from "../types";
 
 const night = { chips_per_buyin: 1000, money_per_buyin: 100 };
@@ -110,5 +110,47 @@ describe("versions", () => {
     expect(chipCheck(lines, players, { a: 2500, b: 1000 })).toEqual({ handed: 4000, counted: 3900, gap: -100 });
     // a player counted live is not double counted even if marked out
     expect(chipCheck(lines, players, { a: 2600, b: 1000, c: 400 }).counted).toBe(4000);
+  });
+});
+
+describe("settleViaHub (everything through the cashier)", () => {
+  const nets = [
+    { id: "cashier", net: 30 },
+    { id: "a", net: -100 },
+    { id: "b", net: 120 },
+    { id: "c", net: -50 },
+  ];
+  it("losers pay the cashier and the cashier pays winners", () => {
+    expect(settleViaHub(nets, "cashier")).toEqual([
+      { from: "a", to: "cashier", amount: 100 },
+      { from: "cashier", to: "b", amount: 120 },
+      { from: "c", to: "cashier", amount: 50 },
+    ]);
+  });
+  it("the cashier ends exactly at their own result", () => {
+    const t = settleViaHub(nets, "cashier");
+    const cashierIn = t.filter((x) => x.to === "cashier").reduce((s, x) => s + x.amount, 0);
+    const cashierOut = t.filter((x) => x.from === "cashier").reduce((s, x) => s + x.amount, 0);
+    expect(cashierIn - cashierOut).toBe(30);
+  });
+  it("skips players who broke even", () => {
+    expect(settleViaHub([{ id: "h", net: 0 }, { id: "x", net: 0.001 }], "h")).toEqual([]);
+  });
+});
+
+describe("settle (minimal transfers)", () => {
+  it("every player ends at zero and transfers are at most n-1", () => {
+    const nets = [
+      { id: "a", net: -73.5 },
+      { id: "b", net: 120 },
+      { id: "c", net: -46.5 },
+      { id: "d", net: 0 },
+    ];
+    const t = settle(nets);
+    expect(t.length).toBeLessThanOrEqual(nets.length - 1);
+    for (const n of nets) {
+      const bal = t.filter((x) => x.to === n.id).reduce((s, x) => s + x.amount, 0) - t.filter((x) => x.from === n.id).reduce((s, x) => s + x.amount, 0);
+      expect(Math.round(bal * 100) / 100).toBe(n.net);
+    }
   });
 });
