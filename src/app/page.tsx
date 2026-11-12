@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import { signInWithGoogle } from "@/lib/hooks";
 import { Button, ChipDot } from "@/components/ui";
@@ -68,6 +69,10 @@ export default function Landing() {
           כניסה עם Google
         </Button>
         <p className="mt-3 text-center text-xs text-muted">האפליקציה רק מתעדת. היא לא מחזיקה ולא מעבירה כסף.</p>
+        <p className="mt-2 flex justify-center gap-4 text-xs text-muted">
+          <Link href="/privacy" className="underline">מדיניות פרטיות</Link>
+          <Link href="/terms" className="underline">תנאי שימוש</Link>
+        </p>
       </div>
     </main>
   );
