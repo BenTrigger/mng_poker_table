@@ -5,6 +5,7 @@ import {
   CalendarClock, Share2, Copy, Check, Lock, LockOpen, Play, Hourglass, LogOut, Ban, UserPlus, Trophy, Pencil, Coins, Layers, Repeat,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
+import { addGuest } from "@/lib/guests";
 import { useAuth } from "@/lib/hooks";
 import { useTournament, useNow } from "@/lib/tournament-hooks";
 import { clockState, prizePool, rebuyLabel, tournamentError, tournamentInviteText } from "@/lib/tournament";
@@ -13,7 +14,7 @@ import { formatMoney } from "@/lib/calc";
 import { TopBar } from "@/components/top-bar";
 import { PlaceInfo } from "@/components/place";
 import { useGeocode } from "@/lib/waze";
-import { Avatar, Badge, Button, Card, Empty, Sheet, Spinner, Toast } from "@/components/ui";
+import { Avatar, Badge, Button, Card, Empty, Sheet, Spinner, Toast, inputCls } from "@/components/ui";
 import { T_STATUS, TournamentFormView } from "@/components/tournament-section";
 import type { Member, TournamentEntryView } from "@/lib/types";
 import { LiveView } from "./live";
@@ -32,6 +33,8 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
   const [copied, setCopied] = useState(false);
   const [sheet, setSheet] = useState<"add" | "edit" | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
+  const [membersRev, setMembersRev] = useState(0);
+  const [guest, setGuest] = useState("");
   const now = useNow(view?.tournament.status === "running");
 
   const isAdmin = view?.me?.role === "admin" && view.me.status === "active";
@@ -46,7 +49,7 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
       .eq("status", "active")
       .order("display_name")
       .then(({ data }) => setMembers(data ?? []));
-  }, [isAdmin, tableId]);
+  }, [isAdmin, tableId, membersRev]);
 
   useEffect(() => {
     if (!toast) return;
@@ -95,6 +98,27 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
     run("admin", () => supabase().rpc("admin_tournament_entry", { p_id: t.id, p_member: member, p_add: add }));
   const update = (patch: Record<string, unknown>, ok?: string) => run("update", () => supabase().from("tournaments").update(patch).eq("id", t.id), ok);
   const start = () => run("start", () => supabase().rpc("start_tournament", { p_id: t.id }), "המקומות הוגרלו. בהצלחה לכולם!");
+
+  // Admin: add a guest by name only (no Google account) and register them
+  const addGuestEntry = async () => {
+    setBusy("guest");
+    let g;
+    try {
+      g = await addGuest(t.table_id, guest);
+    } catch (e) {
+      setBusy(null);
+      setToast({ text: (e as Error).message, tone: "loss" });
+      return;
+    }
+    setMembersRev((n) => n + 1);
+    setGuest("");
+    if (entries.some((e) => e.member_id === g.id)) {
+      setBusy(null);
+      setToast({ text: `${g.display_name} כבר רשום`, tone: "loss" });
+      return;
+    }
+    await run("guest", () => supabase().rpc("admin_tournament_entry", { p_id: t.id, p_member: g.id, p_add: true }), `${g.display_name} נוסף כאורח`);
+  };
 
   const notIn = members.filter((m) => !entries.some((e) => e.member_id === m.id));
   const st = T_STATUS[t.status];
@@ -287,6 +311,19 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
       <Sheet open={sheet === "add"} onClose={() => setSheet(null)} title={t.status === "running" ? "כניסה מאוחרת" : "הוספת שחקנים"}>
         <div className="space-y-1">
           {t.status === "running" && <p className="mb-2 text-sm text-muted">השחקן מקבל כיסא בשולחן הכי קצר וערימת פתיחה מלאה.</p>}
+          <div className="mb-3 flex gap-2">
+            <input
+              className={`${inputCls} h-11`}
+              placeholder="אורח חדש (רק שם)"
+              value={guest}
+              maxLength={40}
+              onChange={(e) => setGuest(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && guest.trim() && !busy && addGuestEntry()}
+            />
+            <Button size="md" variant="soft" loading={busy === "guest"} disabled={!guest.trim() || !!busy} onClick={addGuestEntry}>
+              <UserPlus className="size-4" /> הוספה
+            </Button>
+          </div>
           {notIn.length === 0 ? (
             <p className="text-sm text-muted">כל השחקנים של השולחן כבר בפנים.</p>
           ) : (

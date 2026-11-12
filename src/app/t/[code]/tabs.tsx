@@ -2,9 +2,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Plus, Share2, Mail, Check, X, Crown, Trash2, UserPlus, Copy, CalendarDays, ChevronLeft, Trophy, Flame, TrendingDown, Coins, Spade, Pencil,
+  Plus, Share2, Mail, Check, X, Crown, Trash2, UserPlus, Copy, CalendarDays, ChevronLeft, Trophy, Flame, TrendingDown, Coins, Spade, Pencil, Link2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
+import { addGuest as addGuestByName, linkGuest } from "@/lib/guests";
 import type { useTable } from "@/lib/hooks";
 import type { Member, NightPlayer, Profile, Settlement, PokerTable, ChipSet } from "@/lib/types";
 import { formatMoney, formatSigned, memberStats } from "@/lib/calc";
@@ -126,6 +127,8 @@ export function PlayersTab({ ctx }: { ctx: Ctx }) {
   const [busy, setBusy] = useState(false);
   const [sel, setSel] = useState<Member | null>(null);
   const [copied, setCopied] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [err, setErr] = useState("");
   const active = ctx.members.filter((m) => m.status === "active");
   const pending = ctx.members.filter((m) => m.status === "pending");
   const origin = typeof window !== "undefined" ? location.origin : "";
@@ -136,16 +139,44 @@ export function PlayersTab({ ctx }: { ctx: Ctx }) {
 
   async function addGuest() {
     setBusy(true);
-    const { data } = await supabase()
-      .from("table_members")
-      .insert({ table_id: ctx.table.id, display_name: name.trim(), status: "active" })
-      .select()
-      .single();
-    setBusy(false);
-    setName("");
-    setAddOpen(false);
+    setErr("");
+    try {
+      const data = await addGuestByName(ctx.table.id, name);
+      setName("");
+      setAddOpen(false);
+      await ctx.reload();
+      setSel(data);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Signed-in members a guest can be linked to (e.g. the guest joined with the general table link)
+  const linkTargets = ctx.members.filter((m) => m.user_id && m.status !== "removed");
+  async function link(guest: Member, target: Member) {
+    if (!confirm(`לקשר את האורח "${guest.display_name}" לחשבון של ${target.display_name}? כל הערבים, החובות והסטטיסטיקה של האורח יעברו אליו.`)) return;
+    setBusy(true);
+    setErr("");
+    try {
+      await linkGuest(guest.id, target.id);
+      setLinkOpen(false);
+      setSel(null);
+      await ctx.reload();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rename(m: Member) {
+    const n = prompt("שם האורח", m.display_name)?.trim();
+    if (!n || n === m.display_name) return;
+    await supabase().from("table_members").update({ display_name: n.slice(0, 40) }).eq("id", m.id);
     await ctx.reload();
-    if (data) setSel(data);
+    setSel(null);
   }
 
   async function setStatus(m: Member, patch: Partial<Member>) {
@@ -222,8 +253,8 @@ export function PlayersTab({ ctx }: { ctx: Ctx }) {
         <div className="mb-2 flex items-center justify-between px-1">
           <h2 className="text-sm font-bold text-muted">שחקנים ({active.length})</h2>
           {ctx.isAdmin && (
-            <Button size="sm" variant="ghost" onClick={() => setAddOpen(true)}>
-              <UserPlus className="size-4" /> הוספה
+            <Button size="sm" variant="ghost" onClick={() => { setErr(""); setAddOpen(true); }}>
+              <UserPlus className="size-4" /> הוספת אורח
             </Button>
           )}
         </div>
@@ -235,7 +266,7 @@ export function PlayersTab({ ctx }: { ctx: Ctx }) {
                 <div className="truncate font-bold">
                   {m.display_name} {m.id === ctx.me.id && <span className="text-xs text-muted">(אני)</span>}
                 </div>
-                {!m.user_id && <div className="text-xs text-warn">עוד לא נרשם לאפליקציה</div>}
+                {!m.user_id && <div className="text-xs text-warn">אורח · עוד לא נרשם לאפליקציה</div>}
               </div>
               {m.role === "admin" && (
                 <Badge tone="gold">
@@ -247,11 +278,12 @@ export function PlayersTab({ ctx }: { ctx: Ctx }) {
         </div>
       </section>
 
-      <Sheet open={addOpen} onClose={() => setAddOpen(false)} title="שחקן חדש">
+      <Sheet open={addOpen} onClose={() => setAddOpen(false)} title="הוספת אורח לפי שם">
         <div className="space-y-4">
-          <Field label="שם" hint="אחרי ההוספה תוכל לשלוח לו הזמנה בוואטסאפ או במייל. כשיתחבר עם גוגל, הפרופיל יקושר אליו עם כל ההיסטוריה.">
-            <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          <Field label="שם" hint="אורח לא צריך חשבון גוגל. הוא נשמר בשולחן עם כל הערבים, החובות והסטטיסטיקה. כשירצה להירשם, שלח לו קישור אישי או קשר אותו לחשבון שלו, וכל ההיסטוריה עוברת אליו.">
+            <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && name.trim() && addGuest()} autoFocus />
           </Field>
+          {err && <p className="text-sm text-loss">{err}</p>}
           <Button className="w-full" disabled={!name.trim()} loading={busy} onClick={addGuest}>
             הוספה
           </Button>
@@ -263,7 +295,7 @@ export function PlayersTab({ ctx }: { ctx: Ctx }) {
           <div className="space-y-3">
             {!sel.user_id && (
               <>
-                <p className="text-sm text-muted">שלח הזמנה אישית. מי שנכנס דרך הקישור מקושר לפרופיל הזה.</p>
+                <p className="text-sm text-muted">אורח בלי חשבון. כשירצה להירשם, שלח לו הזמנה אישית: מי שנכנס דרך הקישור מקבל את כל ההיסטוריה של האורח.</p>
                 <div className="grid grid-cols-2 gap-2">
                   <a href={`https://wa.me/?text=${encodeURIComponent(inviteText(sel))}`} target="_blank" rel="noreferrer">
                     <Button className="w-full">
@@ -278,6 +310,16 @@ export function PlayersTab({ ctx }: { ctx: Ctx }) {
                 </div>
               </>
             )}
+            {!sel.user_id && (
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="soft" className="w-full" disabled={busy} onClick={() => { setErr(""); setLinkOpen(true); }}>
+                  <Link2 className="size-4" /> קישור לחשבון קיים
+                </Button>
+                <Button variant="soft" className="w-full" disabled={busy} onClick={() => rename(sel)}>
+                  <Pencil className="size-4" /> שינוי שם
+                </Button>
+              </div>
+            )}
             {sel.user_id && sel.id !== ctx.me.id && (
               <Button variant="soft" className="w-full" onClick={() => setStatus(sel, { role: sel.role === "admin" ? "player" : "admin" }).then(() => setSel(null))}>
                 <Crown className="size-4" /> {sel.role === "admin" ? "הסרת הרשאת מנהל" : "הפוך למנהל משנה"}
@@ -290,6 +332,32 @@ export function PlayersTab({ ctx }: { ctx: Ctx }) {
             )}
           </div>
         )}
+      </Sheet>
+
+      <Sheet open={linkOpen && !!sel} onClose={() => setLinkOpen(false)} title={`קישור "${sel?.display_name ?? ""}" לחשבון`}>
+        <div className="space-y-3">
+          <p className="text-sm text-muted">האורח נרשם לאפליקציה? בחר את החשבון שלו. כל הערבים, הטורנירים, החובות והסטטיסטיקה של האורח יעברו אליו, והאורח יימחק מהרשימה.</p>
+          {linkTargets.length === 0 ? (
+            <p className="text-sm text-muted">אין עדיין שחקנים רשומים לקשר אליהם.</p>
+          ) : (
+            <div className="max-h-[45dvh] space-y-1 overflow-y-auto">
+              {linkTargets.map((m) => (
+                <button
+                  key={m.id}
+                  disabled={busy}
+                  onClick={() => sel && link(sel, m)}
+                  className="flex w-full items-center gap-3 rounded-2xl p-2 text-right hover:bg-white/5 disabled:opacity-40"
+                >
+                  <Avatar name={m.display_name} src={m.avatar_url} size={34} />
+                  <span className="min-w-0 flex-1 truncate font-bold">{m.display_name}</span>
+                  {m.status === "pending" && <span className="text-xs text-warn">מבקש להצטרף</span>}
+                  <Link2 className="size-4 text-muted" />
+                </button>
+              ))}
+            </div>
+          )}
+          {err && <p className="text-sm text-loss">{err}</p>}
+        </div>
       </Sheet>
     </div>
   );

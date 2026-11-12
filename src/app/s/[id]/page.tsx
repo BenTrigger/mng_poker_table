@@ -6,6 +6,7 @@ import {
   CalendarClock, Share2, Copy, Check, Lock, LockOpen, Play, Hourglass, LogOut, Minus, Plus, Ban, UserPlus, ArrowDownToLine, Trash2, Armchair, Pencil,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
+import { addGuest } from "@/lib/guests";
 import { useAuth } from "@/lib/hooks";
 import { PokerTable, type Seat } from "@/components/poker-table";
 import { TopBar } from "@/components/top-bar";
@@ -44,6 +45,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
   const isAdmin = view?.me?.role === "admin" && view.me.status === "active";
   const tableId = view?.table.id;
 
+  const [membersRev, setMembersRev] = useState(0);
   useEffect(() => {
     if (!isAdmin || !tableId) return;
     supabase()
@@ -53,7 +55,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
       .eq("status", "active")
       .order("display_name")
       .then(({ data }) => setMembers(data ?? []));
-  }, [isAdmin, tableId]);
+  }, [isAdmin, tableId, membersRev]);
 
   useEffect(() => {
     if (!toast) return;
@@ -101,6 +103,25 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
   const leave = () => run("leave", () => supabase().rpc("leave_signup", { p_signup: s.id }), "ההרשמה שלך בוטלה");
   const adminSeat = (member: string, seat: number | null) =>
     run("admin", () => supabase().rpc("admin_seat", { p_signup: s.id, p_member: member, p_seat: seat }));
+  // Admin: add a guest by name (no Google account) straight into a seat (0 = waiting list)
+  async function seatGuest(name: string, seat: number) {
+    setBusy("guest");
+    let guest;
+    try {
+      guest = await addGuest(table.id, name);
+    } catch (e) {
+      setBusy(null);
+      setToast({ text: (e as Error).message, tone: "loss" });
+      return false;
+    }
+    setMembersRev((n) => n + 1);
+    if (seats.some((x) => x.member_id === guest.id && x.seat !== null)) {
+      setBusy(null);
+      setToast({ text: `${guest.display_name} כבר רשום`, tone: "loss" });
+      return false;
+    }
+    return run("guest", () => supabase().rpc("admin_seat", { p_signup: s.id, p_member: guest.id, p_seat: seat }), `${guest.display_name} נוסף כאורח`);
+  }
   const resize = (n: number) => run("resize", () => supabase().rpc("resize_signup", { p_signup: s.id, p_seats: n }));
   const setStatus = (status: "open" | "closed" | "cancelled") =>
     run("status", () => supabase().from("signups").update({ status }).eq("id", s.id), status === "open" ? "ההרשמה נפתחה" : status === "closed" ? "ההרשמה נסגרה" : "הערב בוטל");
@@ -229,6 +250,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
                   <Plus className="size-4" />
                 </Button>
               </div>
+              <p className="text-xs text-muted">לחיצה על כיסא פנוי: להושיב שחקן מהשולחן או אורח לפי שם בלבד (בלי חשבון).</p>
               {map.slice(s.seats - 1).some(Boolean) && <p className="text-xs text-muted">הורדת מקום מעבירה את מי שיושב בכיסא האחרון לראש רשימת ההמתנה.</p>}
               <div className="grid grid-cols-2 gap-2">
                 {open ? (
@@ -352,6 +374,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
             onToWait={async (member) => (await adminSeat(member, 0)) && setSeatSheet(null)}
             onRemove={async (member) => (await adminSeat(member, null)) && setSeatSheet(null)}
             onTakeMyself={async () => (await claim(seatSheet)) && setSeatSheet(null)}
+            onGuest={async (name) => (await seatGuest(name, seatSheet)) && setSeatSheet(null)}
             canTakeMyself={!sheetWho && open && mine?.seat !== seatSheet}
           />
         )}
@@ -396,7 +419,9 @@ function SeatSheet(p: {
   onToWait: (member: string) => void;
   onRemove: (member: string) => void;
   onTakeMyself: () => void;
+  onGuest: (name: string) => void;
 }) {
+  const [guest, setGuest] = useState("");
   if (p.who) {
     return (
       <div className="space-y-3">
@@ -434,7 +459,23 @@ function SeatSheet(p: {
       )}
       {p.isAdmin && (
         <>
-          <p className="text-sm text-muted">או להושיב שחקן מהשולחן (גם מי שעוד לא נרשם לאפליקציה):</p>
+          <div>
+            <p className="mb-2 text-sm text-muted">אורח בלי חשבון גוגל? רק שם, והוא נשמר בשולחן לפעם הבאה:</p>
+            <div className="flex gap-2">
+              <input
+                className={`${inputCls} h-11`}
+                placeholder="שם האורח"
+                value={guest}
+                maxLength={40}
+                onChange={(e) => setGuest(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && guest.trim() && !p.busy && p.onGuest(guest)}
+              />
+              <Button size="md" variant="soft" disabled={!guest.trim() || p.busy} onClick={() => p.onGuest(guest)}>
+                <UserPlus className="size-4" /> הושבה
+              </Button>
+            </div>
+          </div>
+          <p className="text-sm text-muted">או להושיב שחקן מהשולחן (כולל אורחים מפעמים קודמות):</p>
           {p.candidates.length === 0 ? (
             <p className="text-sm text-muted">כל השחקנים כבר יושבים.</p>
           ) : (
@@ -448,6 +489,7 @@ function SeatSheet(p: {
                 >
                   <Avatar name={m.display_name} src={m.avatar_url} size={34} />
                   <span className="min-w-0 flex-1 truncate font-bold">{m.display_name}</span>
+                  {!m.user_id && <span className="text-xs text-warn">אורח</span>}
                   <UserPlus className="size-4 text-muted" />
                 </button>
               ))}

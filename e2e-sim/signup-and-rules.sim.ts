@@ -72,7 +72,7 @@ test("invites, early sign-up with seats, table rules and permissions", async ({ 
 
   await test.step("a personal invite link links a guest to their Google account at once", async () => {
     await alon.page.goto(`/t/${code}?tab=players`);
-    await btn(alon.page, "הוספה").first().click();
+    await btn(alon.page, "הוספת אורח").click();
     await sheet(alon.page).locator("input").fill("ורד");
     await btn(sheet(alon.page), "הוספה").click();
     await expect(alon.page.getByText("עוד לא נרשם לאפליקציה")).toBeVisible();

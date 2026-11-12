@@ -235,8 +235,8 @@ test("a full game night with six players", async ({ browser, baseURL }) => {
     await btn(dana.page, "ניהול הערב").click();
     const s = sheet(dana.page);
     await s.locator("div.flex.items-center.gap-3", { hasText: "נועה" }).getByRole("button", { name: "הוספה" }).click();
-    await s.getByPlaceholder("שחקן חדש (שם)").fill("אורח");
-    await s.getByPlaceholder("שחקן חדש (שם)").locator("..").getByRole("button", { name: "הוספה" }).click();
+    await s.getByPlaceholder("אורח חדש (רק שם)").fill("אורח");
+    await s.getByPlaceholder("אורח חדש (רק שם)").locator("..").getByRole("button", { name: "הוספה" }).click();
     const guestRow = s.locator("div.flex.items-center.gap-3", { hasText: "אורח" });
     await guestRow.getByRole("button", { name: "הסרה" }).click();
     // off the night, back in the "can be added" list

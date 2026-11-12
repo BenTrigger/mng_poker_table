@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, Check, X, AlertTriangle, Pencil, Share2, Landmark, UserPlus, LogOut, ImageIcon, Sparkles, Trash2, ArrowLeftRight } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
+import { addGuest as addGuestByName } from "@/lib/guests";
 import { logEvent } from "@/lib/hooks";
 import { balanceNets, chipCheck, chipRate, chipSetTotal, chipsToMoney, formatMoney, formatSigned, moneyToChips, round2, settle, settleViaHub, type PlayerLine, type SettleMode } from "@/lib/calc";
 import { breakdown, chipCountingEnabled, countChipsFromPhoto, saveChipCorrection } from "@/lib/chips";
@@ -682,8 +683,8 @@ export function AdminSheet({
     run("guest", async () => {
       const name = guest.trim();
       if (!name) return;
-      const { data, error } = await supabase().from("table_members").insert({ table_id: night.table_id, display_name: name }).select().single();
-      if (error) throw error;
+      const data = await addGuestByName(night.table_id, name);
+      if (players.some((p) => p.member_id === data.id)) throw new Error(`${data.display_name} כבר בערב`);
       await seat(data.id);
       setGuest("");
     });
@@ -775,7 +776,7 @@ export function AdminSheet({
             </div>
           )}
           <div className="flex gap-2">
-            <input className={`${inputCls} h-11`} placeholder="שחקן חדש (שם)" value={guest} onChange={(e) => setGuest(e.target.value)} />
+            <input className={`${inputCls} h-11`} placeholder="אורח חדש (רק שם)" value={guest} onChange={(e) => setGuest(e.target.value)} />
             <Button size="md" variant="soft" loading={busy === "guest"} disabled={!guest.trim() || !!busy} onClick={addGuest}>
               <UserPlus className="size-4" /> הוספה
             </Button>
