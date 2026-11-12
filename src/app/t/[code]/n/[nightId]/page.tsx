@@ -17,6 +17,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
   const n = useNight(nightId, !!t.me && t.me.status === "active");
   const [sheet, setSheet] = useState<null | "request" | "cashier" | "close" | "admin" | "handover" | { player: string }>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [requestFor, setRequestFor] = useState<string | null>(null); // admin/cashier asked for chips on a player's behalf
   const [showFeed, setShowFeed] = useState(false);
 
   const night = n.night;
@@ -246,7 +247,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
                 <Hand className="size-5" /> הגעתי
               </Button>
             ) : (myLine?.status === "playing" || canManage) && (
-              <Button size="lg" className="min-w-0 flex-1 px-3!" onClick={() => setSheet("request")}>
+              <Button size="lg" className="min-w-0 flex-1 px-3!" onClick={() => { setRequestFor(null); setSheet("request"); }}>
                 <HandCoins className="size-5" /> בקשת צ'יפים
               </Button>
             )}
@@ -269,7 +270,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
         </div>
       )}
 
-      <RequestSheet open={sheet === "request"} onClose={() => setSheet(null)} night={night} me={me} canManage={canManage} players={n.players} members={t.members} chipSet={chipSet} />
+      <RequestSheet open={sheet === "request"} onClose={() => setSheet(null)} night={night} me={me} canManage={canManage} players={n.players} members={t.members} chipSet={chipSet} initialFor={requestFor} />
       <CashierSheet open={sheet === "cashier"} onClose={() => setSheet(null)} night={night} requests={n.requests} members={t.members} chipSet={chipSet} isAdmin={t.isAdmin} onHandover={() => setSheet("handover")} />
       {typeof sheet === "object" && sheet && "player" in sheet && (
         <PlayerSheet
@@ -282,6 +283,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
           lines={lines}
           chipSet={chipSet}
           canManage={canManage}
+          onRequest={open ? () => { setRequestFor(sheet.player); setSheet("request"); } : undefined}
         />
       )}
       <CloseSheet open={sheet === "close"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} pendingCount={pending.length + flagged.length} flaggedCount={flagged.length} handovers={n.handovers} table={t.table!} />
