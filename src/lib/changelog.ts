@@ -6,6 +6,15 @@ export type Release = { version: string; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.14.3",
+    date: "2026-11-12",
+    title: "מסירה בלי צילום",
+    items: [
+      "במסירת צ'יפים הצילום לא חובה: הסכום כבר ממולא לפי הבקשה, ולוחצים \"מסרתי, אישור\". אם נמסר סכום אחר, מתקנים את המספר",
+      "פירוט לפי צבעים גם בלי צילום (לא חובה), והסכום מתעדכן לבד",
+    ],
+  },
+  {
     version: "1.14.2",
     date: "2026-11-12",
     title: "סיום ערב קל למצוא",
