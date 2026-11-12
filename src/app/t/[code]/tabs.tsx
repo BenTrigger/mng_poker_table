@@ -10,6 +10,7 @@ import type { Member, NightPlayer, Profile, Settlement, PokerTable, ChipSet } fr
 import { formatMoney, formatSigned, memberStats } from "@/lib/calc";
 import { Avatar, Badge, Button, Card, ChipDot, Empty, Field, Sheet, inputCls } from "@/components/ui";
 import { ChipSetEditor } from "@/components/chip-set-editor";
+import { UpcomingSignups } from "@/components/signup-section";
 
 export type Ctx = ReturnType<typeof useTable> & { table: PokerTable; me: Member; userId: string; profile: Profile | null };
 
@@ -75,6 +76,8 @@ export function NightTab({ ctx }: { ctx: Ctx }) {
           <Empty icon={<Spade className="size-7" />} title="אין ערב פעיל" text="כשהמנהל יפתח ערב, הוא יופיע כאן." />
         </Card>
       )}
+
+      <UpcomingSignups tableId={ctx.table.id} isAdmin={ctx.isAdmin} />
 
       <section>
         <h2 className="mb-2 px-1 text-sm font-bold text-muted">החובות הפתוחים שלי</h2>
