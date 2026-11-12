@@ -138,10 +138,18 @@ export function balanceNets(lines: { id: string; net: number; finalChips: number
   const totalNet = lines.reduce((s, l) => s + l.net, 0) + fixedTotal;
   if (Math.abs(totalNet) < 0.005 || lines.length === 0) return lines.map((l) => ({ id: l.id, net: round2(l.net) }));
   const totalFinal = lines.reduce((s, l) => s + l.finalChips, 0);
-  return lines.map((l) => {
+  const out = lines.map((l) => {
     const share = totalFinal > 0 ? l.finalChips / totalFinal : 1 / lines.length;
     return { id: l.id, net: round2(l.net - totalNet * share) };
   });
+  // rounding each share to the agora can leave a cent or two over; give it to
+  // the biggest stack so the night still adds up to exactly zero
+  const left = round2(-(out.reduce((s, l) => s + l.net, 0) + fixedTotal));
+  if (left !== 0) {
+    const big = lines.reduce((b, l, i) => (l.finalChips > lines[b].finalChips ? i : b), 0);
+    out[big].net = round2(out[big].net + left);
+  }
+  return out;
 }
 
 export function chipSetTotal(counts: { color: string; count: number }[], chips: { color: string; value: number }[]) {
