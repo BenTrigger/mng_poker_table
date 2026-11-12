@@ -73,7 +73,9 @@ test("a full game night with six players", async ({ browser, baseURL }) => {
   await test.step("admin opens the night: chip set, 1000 chips = ₪100, Yossi is the cashier", async () => {
     const p = dana.page;
     await p.goto(`/t/${code}/new-night`);
-    await btn(p, "הגדרת ערכת צ'יפים").click();
+    // no set yet: a starter set is shown, ready to edit
+    await expect(p.getByText("ערכה התחלתית")).toBeVisible();
+    await btn(p, "עריכת הערכה").click();
     await btn(sheet(p), "שמירת ערכה").click();
     await expect(p.getByText("הערכה שלנו")).toBeVisible();
     await expect(p.getByText("מי משחק הערב (5/10)")).toBeVisible();
@@ -95,6 +97,23 @@ test("a full game night with six players", async ({ browser, baseURL }) => {
     // only the cashier and the admin get the cash box
     await expect(btn(yossi.page, /^קופה/)).toBeVisible();
     await expect(btn(avi.page, /^קופה/)).toHaveCount(0);
+  });
+
+  await test.step("arrivals: players confirm on their phone, the admin marks one who has no phone at hand", async () => {
+    // Yossi is the cashier and Dana opened the night: both count as there
+    await expect(dana.page.getByText("מי עוד לא הגיע (3 מתוך 5)")).toBeVisible();
+    await expect(btn(avi.page, "בקשת צ'יפים")).toHaveCount(0);
+    await expect(yossi.page.getByText("הגעת לשולחן?")).toHaveCount(0);
+    for (const pl of [avi, michal]) {
+      await btn(pl.page, "הגעתי").first().click();
+      await expect(btn(pl.page, "בקשת צ'יפים")).toBeVisible();
+    }
+    await expect(dana.page.getByText("מי עוד לא הגיע (1 מתוך 5)")).toBeVisible();
+    await btn(dana.page, "רון הגיע").click();
+    await expect(dana.page.getByText(/מי עוד לא הגיע/)).toHaveCount(0);
+    await expect(btn(ron.page, "בקשת צ'יפים")).toBeVisible();
+    const { data: ev } = await db().from("night_events").select("kind").eq("night_id", nightId).eq("kind", "arrived");
+    expect(ev).toHaveLength(3);
   });
 
   const cashier = () => (cashierNow === "יוסי" ? yossi : michal);
