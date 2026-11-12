@@ -205,7 +205,8 @@ export function ChipCounter({
     const blob = await compressImage(f);
     setPhoto(blob);
     setPreview(URL.createObjectURL(blob));
-    if (aiOn && chipSet) {
+    // the photo may come before the "is counting on?" answer did: wait for it
+    if ((aiOn || (await chipCountingEnabled())) && chipSet) {
       setCounting(true);
       try {
         const c = await countChipsFromPhoto(blob, chipSet, expected);
