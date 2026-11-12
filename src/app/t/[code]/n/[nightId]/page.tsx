@@ -7,13 +7,14 @@ import { TopBar } from "@/components/top-bar";
 import { PokerTable, type Seat } from "@/components/poker-table";
 import { Avatar, Badge, Button, Card, Spinner, Toast } from "@/components/ui";
 import { RequestSheet, CashierSheet, PlayerSheet, CloseSheet, AdminSheet, Summary, EventFeed } from "./sheets";
+import { HandoverSheet } from "./handover";
 
 export default function NightPage({ params }: { params: Promise<{ code: string; nightId: string }> }) {
   const { code, nightId } = use(params);
   const { user, loading } = useAuth();
   const t = useTable(code, user?.id);
   const n = useNight(nightId, !!t.me && t.me.status === "active");
-  const [sheet, setSheet] = useState<null | "request" | "cashier" | "close" | "admin" | { player: string }>(null);
+  const [sheet, setSheet] = useState<null | "request" | "cashier" | "close" | "admin" | "handover" | { player: string }>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [showFeed, setShowFeed] = useState(false);
 
@@ -196,7 +197,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
       )}
 
       <RequestSheet open={sheet === "request"} onClose={() => setSheet(null)} night={night} me={me} canManage={canManage} players={n.players} members={t.members} chipSet={chipSet} />
-      <CashierSheet open={sheet === "cashier"} onClose={() => setSheet(null)} night={night} requests={n.requests} members={t.members} chipSet={chipSet} isAdmin={t.isAdmin} />
+      <CashierSheet open={sheet === "cashier"} onClose={() => setSheet(null)} night={night} requests={n.requests} members={t.members} chipSet={chipSet} isAdmin={t.isAdmin} onHandover={() => setSheet("handover")} />
       {typeof sheet === "object" && sheet && "player" in sheet && (
         <PlayerSheet
           onClose={() => setSheet(null)}
@@ -210,8 +211,9 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
           canManage={canManage}
         />
       )}
-      <CloseSheet open={sheet === "close"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} pendingCount={pending.length + flagged.length} />
-      <AdminSheet open={sheet === "admin"} onClose={() => setSheet(null)} night={night} players={n.players} members={t.members} />
+      <CloseSheet open={sheet === "close"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} pendingCount={pending.length + flagged.length} handovers={n.handovers} />
+      <AdminSheet open={sheet === "admin"} onClose={() => setSheet(null)} night={night} players={n.players} members={t.members} onHandover={() => setSheet("handover")} />
+      <HandoverSheet open={sheet === "handover"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} handovers={n.handovers} />
     </>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { settle, playerLines, balanceNets, chipSetTotal, memberStats, chipRate } from "../calc";
+import { settle, chipCheck, playerLines, balanceNets, chipSetTotal, memberStats, chipRate } from "../calc";
 import type { ChipRequest, NightPlayer } from "../types";
 
 const night = { chips_per_buyin: 1000, money_per_buyin: 100 };
@@ -97,5 +97,18 @@ describe("versions", () => {
   it("changelog is newest first and releasesSince filters", () => {
     for (let i = 1; i < CHANGELOG.length; i++) expect(compareVersions(CHANGELOG[i - 1].version, CHANGELOG[i].version)).toBe(1);
     expect(releasesSince(CHANGELOG[0].version)).toEqual([]);
+  });
+
+  it("chip check at handover: counted vs handed, players who left count by final chips", () => {
+    const lines = [{ boughtChips: 2000 }, { boughtChips: 1000 }, { boughtChips: 1000 }];
+    const players = [
+      { member_id: "a", status: "playing" as const, final_chips: null },
+      { member_id: "b", status: "playing" as const, final_chips: null },
+      { member_id: "c", status: "out" as const, final_chips: 400 },
+    ];
+    expect(chipCheck(lines, players, { a: 2600, b: 1000 })).toEqual({ handed: 4000, counted: 4000, gap: 0 });
+    expect(chipCheck(lines, players, { a: 2500, b: 1000 })).toEqual({ handed: 4000, counted: 3900, gap: -100 });
+    // a player counted live is not double counted even if marked out
+    expect(chipCheck(lines, players, { a: 2600, b: 1000, c: 400 }).counted).toBe(4000);
   });
 });
