@@ -6,6 +6,14 @@ export type Release = { version: string; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.12.1",
+    date: "2026-11-12",
+    title: "ספירה מתמונה גם כשמצלמים מהר",
+    items: [
+      "תמונה שצולמה מיד בפתיחת החלון (לפני שהאפליקציה סיימה לבדוק שהספירה האוטומטית פעילה) נספרת עכשיו, במקום להישאר בלי תוצאה",
+    ],
+  },
+  {
     version: "1.11.0",
     date: "2026-11-12",
     title: "הצטרפות בקישור, פרטיות אמיתית והעברות בטורניר",
