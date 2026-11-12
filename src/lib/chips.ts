@@ -1,0 +1,61 @@
+import type { Chip, ChipCount } from "./types";
+import { blobToBase64 } from "./image";
+
+export const DEFAULT_CHIPS: Chip[] = [
+  { color: "לבן", hex: "#f1f1f1", value: 1 },
+  { color: "אדום", hex: "#d7263d", value: 5 },
+  { color: "ירוק", hex: "#1b998b", value: 25 },
+  { color: "שחור", hex: "#1c1c1c", value: 100 },
+  { color: "סגול", hex: "#7b2cbf", value: 500 },
+];
+
+export async function countChipsFromPhoto(photo: Blob, chips: Chip[], expected?: number): Promise<ChipCount> {
+  const res = await fetch("/api/count-chips", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image: await blobToBase64(photo), mediaType: "image/jpeg", chips, expected }),
+  });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error(j.error ?? `שגיאה ${res.status}`);
+  }
+  return res.json();
+}
+
+let enabledCache: boolean | null = null;
+export async function chipCountingEnabled(): Promise<boolean> {
+  if (enabledCache != null) return enabledCache;
+  try {
+    const r = await fetch("/api/count-chips");
+    enabledCache = (await r.json()).enabled === true;
+  } catch {
+    enabledCache = false;
+  }
+  return enabledCache;
+}
+
+/** Suggest which chips the cashier should hand over (largest first, keeps some small change). */
+export function breakdown(total: number, chips: Chip[]): { chip: Chip; count: number }[] {
+  const sorted = [...chips].filter((c) => c.value > 0).sort((a, b) => b.value - a.value);
+  const out: { chip: Chip; count: number }[] = [];
+  let left = total;
+  sorted.forEach((c, i) => {
+    // keep ~20% of the stack in smaller denominations when possible
+    const isSmallest = i === sorted.length - 1;
+    const budget = isSmallest ? left : Math.floor((left * (i === 0 ? 0.6 : 0.8)) / c.value) * c.value;
+    const n = Math.floor(budget / c.value);
+    if (n > 0) {
+      out.push({ chip: c, count: n });
+      left -= n * c.value;
+    }
+  });
+  if (left > 0 && out.length) {
+    // fix rounding with the smallest chip
+    const smallest = sorted[sorted.length - 1];
+    const extra = Math.round(left / smallest.value);
+    const row = out.find((r) => r.chip.color === smallest.color);
+    if (row) row.count += extra;
+    else if (extra > 0) out.push({ chip: smallest, count: extra });
+  }
+  return out;
+}

@@ -1,0 +1,217 @@
+"use client";
+import { use, useEffect, useMemo, useRef, useState } from "react";
+import { Landmark, HandCoins, Flag, ListChecks, MoreHorizontal, AlertTriangle, Activity } from "lucide-react";
+import { useAuth, useNight, useTable } from "@/lib/hooks";
+import { chipRate, formatMoney, formatSigned, playerLines } from "@/lib/calc";
+import { TopBar } from "@/components/top-bar";
+import { PokerTable, type Seat } from "@/components/poker-table";
+import { Avatar, Badge, Button, Card, Spinner, Toast } from "@/components/ui";
+import { RequestSheet, CashierSheet, PlayerSheet, CloseSheet, AdminSheet, Summary, EventFeed } from "./sheets";
+
+export default function NightPage({ params }: { params: Promise<{ code: string; nightId: string }> }) {
+  const { code, nightId } = use(params);
+  const { user, loading } = useAuth();
+  const t = useTable(code, user?.id);
+  const n = useNight(nightId, !!t.me && t.me.status === "active");
+  const [sheet, setSheet] = useState<null | "request" | "cashier" | "close" | "admin" | { player: string }>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [showFeed, setShowFeed] = useState(false);
+
+  const night = n.night;
+  const lines = useMemo(() => (night ? playerLines(night, n.players, n.requests) : []), [night, n.players, n.requests]);
+  const chipSet = t.chipSets.find((c) => c.id === night?.chip_set_id) ?? null;
+  const me = t.me;
+  const isCashier = !!me && night?.cashier_member_id === me.id;
+  const canManage = t.isAdmin || isCashier;
+  const pending = n.requests.filter((r) => r.status === "pending");
+  const flagged = n.requests.filter((r) => r.status === "flagged");
+  const myLine = lines.find((l) => l.member_id === me?.id);
+
+  // buzz the cashier when a new request arrives
+  const prevPending = useRef<number | null>(null);
+  useEffect(() => {
+    if (prevPending.current != null && pending.length > prevPending.current && canManage) {
+      const r = pending[pending.length - 1];
+      setToast(`בקשה חדשה: ${t.members.find((m) => m.id === r.member_id)?.display_name ?? ""} · ${Number(r.chips).toLocaleString()} צ'יפים`);
+      navigator.vibrate?.([80, 40, 80]);
+      setTimeout(() => setToast(null), 3000);
+    }
+    prevPending.current = pending.length;
+  }, [pending, canManage, t.members]);
+
+  if (loading || t.loading || n.loading) return <Spinner />;
+  if (!night || !me) return <Spinner />;
+
+  const rate = chipRate(night);
+  const closed = night.status === "closed";
+  const totalBought = lines.reduce((s, l) => s + l.boughtMoney, 0);
+  const nameOf = (id: string) => t.members.find((m) => m.id === id)?.display_name ?? "שחקן";
+  const cashierName = night.cashier_member_id ? nameOf(night.cashier_member_id) : "—";
+
+  const seats: Seat[] = n.players.map((p) => {
+    const l = lines.find((x) => x.member_id === p.member_id)!;
+    const m = t.members.find((x) => x.id === p.member_id);
+    const net = closed ? Number(p.net ?? l.net ?? 0) : l.net;
+    const showNet = closed || p.status === "out";
+    return {
+      id: p.member_id,
+      name: m?.display_name ?? "שחקן",
+      avatar: m?.avatar_url,
+      amount: showNet ? formatSigned(net) : formatMoney(l.boughtMoney),
+      sub: showNet ? (closed ? undefined : "יצא") : l.buyins ? `${+l.buyins.toFixed(1)} כניסות` : "טרם קנה",
+      tone: showNet ? ((net ?? 0) >= 0 ? "win" : "loss") : l.boughtMoney ? "gold" : "muted",
+      isCashier: p.member_id === night.cashier_member_id,
+      isMe: p.member_id === me.id,
+      pending: l.pendingChips > 0,
+      out: p.status === "out" && !closed,
+    };
+  });
+
+  const dateStr = new Date(night.started_at).toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "numeric" });
+
+  return (
+    <>
+      <Toast text={toast} />
+      <TopBar
+        title={closed ? `סיכום ערב · ${dateStr}` : `ערב ${dateStr}`}
+        sub={`${Number(night.chips_per_buyin).toLocaleString()} צ'יפים = ${formatMoney(Number(night.money_per_buyin))} · קופאי: ${cashierName}`}
+        back={`/t/${code}`}
+        right={
+          t.isAdmin && !closed ? (
+            <button className="rounded-full p-2 text-muted hover:bg-white/5" onClick={() => setSheet("admin")} aria-label="ניהול">
+              <MoreHorizontal className="size-5" />
+            </button>
+          ) : undefined
+        }
+      />
+
+      <main className="mx-auto max-w-lg px-3 pb-36 pt-2">
+        <PokerTable
+          seats={seats}
+          onSeat={(id) => setSheet({ player: id })}
+          center={
+            <div>
+              <div className="text-[11px] font-bold tracking-wide text-white/60">{closed ? "סה\"כ קופה" : "בקופה"}</div>
+              <div className="num font-[family-name:var(--font-display)] text-3xl font-extrabold text-white drop-shadow">{formatMoney(totalBought)}</div>
+              <div className="num mt-0.5 text-[11px] text-white/60">{Math.round(totalBought / (rate || 1)).toLocaleString()} צ'יפים</div>
+              {!closed && pending.length > 0 && (
+                <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-bold text-gold">
+                  <HandCoins className="size-3.5" /> {pending.length} ממתינים לקופאי
+                </div>
+              )}
+            </div>
+          }
+        />
+
+        {closed ? (
+          <Summary night={night} players={n.players} lines={lines} settlements={n.settlements} members={t.members} meId={me.id} isAdmin={t.isAdmin} reload={n.reload} />
+        ) : (
+          <>
+            {t.isAdmin && flagged.length > 0 && (
+              <button onClick={() => setSheet("cashier")} className="mb-3 flex w-full items-center gap-3 rounded-3xl border border-warn/40 bg-warn/10 p-4 text-right">
+                <AlertTriangle className="size-6 shrink-0 text-warn" />
+                <div className="flex-1">
+                  <div className="font-bold text-warn">{flagged.length} מסירות לא תואמות</div>
+                  <div className="text-xs text-muted">הספירה בתמונה לא תאמה לבקשה. צריך את האישור שלך.</div>
+                </div>
+              </button>
+            )}
+
+            {myLine && myLine.status === "playing" && (
+              <Card className="mb-3 flex items-center gap-3">
+                <div className="flex-1">
+                  <div className="text-xs text-muted">אני בערב הזה</div>
+                  <div className="num text-xl font-extrabold">{formatMoney(myLine.boughtMoney)}</div>
+                </div>
+                {myLine.pendingChips > 0 && <Badge tone="warn">ממתין {myLine.pendingChips.toLocaleString()}</Badge>}
+              </Card>
+            )}
+
+            {/* who bought how much */}
+            <Card className="p-0">
+              <div className="flex items-center justify-between px-4 pb-1 pt-4">
+                <h2 className="font-bold">מי קנה ובכמה</h2>
+                <button className="flex items-center gap-1 text-xs text-muted" onClick={() => setShowFeed((s) => !s)}>
+                  <Activity className="size-3.5" /> {showFeed ? "הסתר יומן" : "יומן פעולות"}
+                </button>
+              </div>
+              <div className="divide-y divide-line">
+                {[...lines]
+                  .sort((a, b) => b.boughtMoney - a.boughtMoney)
+                  .map((l) => {
+                    const m = t.members.find((x) => x.id === l.member_id);
+                    const max = Math.max(...lines.map((x) => x.boughtMoney), 1);
+                    return (
+                      <button key={l.member_id} onClick={() => setSheet({ player: l.member_id })} className="flex w-full items-center gap-3 px-4 py-3 text-right">
+                        <Avatar name={m?.display_name ?? ""} src={m?.avatar_url} size={34} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 text-sm font-bold">
+                            <span className="truncate">{m?.display_name}</span>
+                            {l.member_id === night.cashier_member_id && <Landmark className="size-3.5 text-gold" />}
+                            {l.status === "out" && <Badge>יצא · {formatSigned(l.net)}</Badge>}
+                          </div>
+                          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/5">
+                            <div className="h-full rounded-full bg-gradient-to-l from-[#ffd77a] to-gold-2" style={{ width: `${(l.boughtMoney / max) * 100}%` }} />
+                          </div>
+                        </div>
+                        <div className="text-left">
+                          <div className="num font-extrabold">{formatMoney(l.boughtMoney)}</div>
+                          <div className="num text-[11px] text-muted">{l.boughtChips.toLocaleString()} צ'יפים</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
+              {showFeed && <EventFeed events={n.events} members={t.members} />}
+            </Card>
+          </>
+        )}
+      </main>
+
+      {!closed && (
+        <div className="glass fixed inset-x-0 bottom-0 z-30 border-t border-line p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="mx-auto flex max-w-lg gap-2">
+            {(myLine?.status === "playing" || canManage) && (
+              <Button size="lg" className="flex-1" onClick={() => setSheet("request")}>
+                <HandCoins className="size-5" /> בקשת צ'יפים
+              </Button>
+            )}
+            {canManage && (
+              <Button size="lg" variant="soft" className="relative" onClick={() => setSheet("cashier")}>
+                <ListChecks className="size-5" /> קופה
+                {pending.length + flagged.length > 0 && (
+                  <span className="pulse-ring absolute -left-1 -top-1 grid size-6 place-items-center rounded-full bg-gold text-xs font-extrabold text-[#1d1405]">
+                    {pending.length + flagged.length}
+                  </span>
+                )}
+              </Button>
+            )}
+            {t.isAdmin && (
+              <Button size="lg" variant="soft" onClick={() => setSheet("close")} aria-label="סגירת ערב">
+                <Flag className="size-5" />
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <RequestSheet open={sheet === "request"} onClose={() => setSheet(null)} night={night} me={me} canManage={canManage} players={n.players} members={t.members} chipSet={chipSet} />
+      <CashierSheet open={sheet === "cashier"} onClose={() => setSheet(null)} night={night} requests={n.requests} members={t.members} chipSet={chipSet} isAdmin={t.isAdmin} />
+      {typeof sheet === "object" && sheet && "player" in sheet && (
+        <PlayerSheet
+          onClose={() => setSheet(null)}
+          night={night}
+          memberId={sheet.player}
+          players={n.players}
+          requests={n.requests}
+          members={t.members}
+          lines={lines}
+          chipSet={chipSet}
+          canManage={canManage}
+        />
+      )}
+      <CloseSheet open={sheet === "close"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} pendingCount={pending.length + flagged.length} />
+      <AdminSheet open={sheet === "admin"} onClose={() => setSheet(null)} night={night} players={n.players} members={t.members} />
+    </>
+  );
+}
