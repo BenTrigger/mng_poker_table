@@ -139,6 +139,18 @@ export type ChipCount = {
   notes: string;
 };
 
+/** A person's fix to an automatic count, or a free note about the chip set. Fed back into later counts. */
+export type ChipCorrection = {
+  id: string;
+  chip_set_id: string;
+  table_id: string;
+  detected: { color: string; count: number }[] | null;
+  actual: { color: string; count: number }[] | null;
+  note: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
 export type HandoverCount = { member_id: string; chips: number; detected: number | null; photo_path: string | null };
 
 export type CashierHandover = {

@@ -1,5 +1,6 @@
 import type { Chip, ChipCount, ChipSet } from "./types";
 import { blobToBase64 } from "./image";
+import { supabase } from "./supabase/client";
 
 export const DEFAULT_CHIPS: Chip[] = [
   { color: "לבן", hex: "#f1f1f1", value: 1 },
@@ -9,11 +10,11 @@ export const DEFAULT_CHIPS: Chip[] = [
   { color: "סגול", hex: "#7b2cbf", value: 500 },
 ];
 
-export async function countChipsFromPhoto(photo: Blob, chipSet: Pick<ChipSet, "chips" | "table_id">, expected?: number): Promise<ChipCount> {
+export async function countChipsFromPhoto(photo: Blob, chipSet: Pick<ChipSet, "id" | "chips" | "table_id">, expected?: number): Promise<ChipCount> {
   const res = await fetch("/api/count-chips", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ image: await blobToBase64(photo), mediaType: "image/jpeg", chips: chipSet.chips, expected, tableId: chipSet.table_id }),
+    body: JSON.stringify({ image: await blobToBase64(photo), mediaType: "image/jpeg", chips: chipSet.chips, expected, tableId: chipSet.table_id, chipSetId: chipSet.id }),
   });
   if (!res.ok) {
     const j = await res.json().catch(() => ({}));
@@ -58,4 +59,23 @@ export function breakdown(total: number, chips: Chip[]): { chip: Chip; count: nu
     else if (extra > 0) out.push({ chip: smallest, count: extra });
   }
   return out;
+}
+
+/** Remembers a fix to an automatic count (and/or a note) so later counts of this set learn from it. */
+export async function saveChipCorrection(
+  chipSet: Pick<ChipSet, "id" | "table_id">,
+  fix: { detected?: { color: string; count: number }[]; actual?: { color: string; count: number }[]; note?: string },
+) {
+  const note = fix.note?.trim() || null;
+  const changed = fix.detected && fix.actual && fix.detected.some((d) => fix.actual!.find((a) => a.color === d.color)?.count !== d.count);
+  if (!note && !changed) return;
+  const { data: auth } = await supabase().auth.getUser();
+  await supabase().from("chip_corrections").insert({
+    chip_set_id: chipSet.id,
+    table_id: chipSet.table_id,
+    detected: changed ? fix.detected : null,
+    actual: changed ? fix.actual : null,
+    note,
+    created_by: auth.user?.id,
+  });
 }

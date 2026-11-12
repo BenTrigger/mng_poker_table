@@ -605,6 +605,7 @@ export function SettingsTab({ ctx }: { ctx: Ctx }) {
         {editing && (
           <ChipSetEditor
             tableId={ctx.table.id}
+            chipSetId={editing === "new" ? undefined : editing.id}
             key={editing === "new" ? "new" : editing.id}
             initial={editing === "new" ? undefined : editing.chips}
             initialName={editing === "new" ? undefined : editing.name}

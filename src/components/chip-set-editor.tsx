@@ -5,14 +5,17 @@ import type { Chip } from "@/lib/types";
 import { DEFAULT_CHIPS } from "@/lib/chips";
 import { MAX_IMAGES_PER_CHIP, mergeLearned, removeChipImages, uploadChipImages, useChipImageUrls } from "@/lib/chip-learn";
 import { ChipLearner } from "./chip-learner";
+import { ChipSetNotes } from "./chip-set-notes";
 import { Button, ChipDot, Field, inputCls } from "./ui";
 
 type EditChip = Chip & { newImages?: Blob[]; previews?: string[] };
 
 export function ChipSetEditor({
-  tableId, initial, initialName, onSave, saving,
+  tableId, chipSetId, initial, initialName, onSave, saving,
 }: {
   tableId: string;
+  /** set when editing a saved set: shows what was learned from count fixes */
+  chipSetId?: string;
   initial?: Chip[];
   initialName?: string;
   onSave: (name: string, chips: Chip[]) => void | Promise<void>;
@@ -124,6 +127,11 @@ export function ChipSetEditor({
       <Button className="w-full" disabled={!valid} loading={saving || uploading} onClick={save}>
         שמירת ערכה
       </Button>
+      {chipSetId && (
+        <div className="border-t border-line pt-4">
+          <ChipSetNotes chipSetId={chipSetId} tableId={tableId} />
+        </div>
+      )}
     </div>
   );
 }

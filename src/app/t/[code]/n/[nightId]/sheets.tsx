@@ -3,8 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, Check, X, AlertTriangle, Pencil, Share2, Landmark, UserPlus, LogOut, ImageIcon, Sparkles, Trash2, ArrowLeftRight } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { logEvent } from "@/lib/hooks";
-import { balanceNets, chipCheck, chipRate, chipsToMoney, formatMoney, formatSigned, moneyToChips, round2, settle, settleViaHub, type PlayerLine, type SettleMode } from "@/lib/calc";
-import { breakdown, chipCountingEnabled, countChipsFromPhoto } from "@/lib/chips";
+import { balanceNets, chipCheck, chipRate, chipSetTotal, chipsToMoney, formatMoney, formatSigned, moneyToChips, round2, settle, settleViaHub, type PlayerLine, type SettleMode } from "@/lib/calc";
+import { breakdown, chipCountingEnabled, countChipsFromPhoto, saveChipCorrection } from "@/lib/chips";
 import { compressImage } from "@/lib/image";
 import type { PokerTable, CashierHandover, ChipCount, ChipRequest, ChipSet, GameNight, Member, NightEvent, NightPlayer, Settlement } from "@/lib/types";
 import { Avatar, Badge, Button, Card, ChipDot, Field, Sheet, inputCls } from "@/components/ui";
@@ -172,6 +172,8 @@ export function ChipCounter({
   const [counting, setCounting] = useState(false);
   const [count, setCount] = useState<ChipCount | null>(null);
   const [manual, setManual] = useState<string>("");
+  const [fixed, setFixed] = useState<Record<string, number>>({});
+  const [note, setNote] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -190,6 +192,8 @@ export function ChipCounter({
       try {
         const c = await countChipsFromPhoto(blob, chipSet, expected);
         setCount(c);
+        setFixed(Object.fromEntries(c.counts.map((x) => [x.color, x.count])));
+        setNote("");
         setManual(String(c.total));
       } catch (e) {
         setErr(`לא הצלחתי לספור: ${(e as Error).message}. אפשר להזין ידנית.`);
@@ -201,6 +205,24 @@ export function ChipCounter({
 
   const total = Number(manual) || 0;
   const edited = count != null && total !== count.total;
+  const colourFixed = count != null && count.counts.some((c) => (fixed[c.color] ?? 0) !== c.count);
+
+  function setColour(color: string, n: number) {
+    const next = { ...fixed, [color]: Math.max(0, n) };
+    setFixed(next);
+    if (chipSet) setManual(String(chipSetTotal(chipSet.chips.map((c) => ({ color: c.color, count: next[c.color] ?? 0 })), chipSet.chips)));
+  }
+
+  function finish() {
+    if (count && chipSet && (colourFixed || note.trim())) {
+      saveChipCorrection(chipSet, {
+        detected: count.counts,
+        actual: chipSet.chips.map((c) => ({ color: c.color, count: fixed[c.color] ?? 0 })),
+        note,
+      }).catch(() => {});
+    }
+    onDone({ total, photo, detected: count?.total ?? null, count, manual: !count || edited });
+  }
 
   return (
     <div className="space-y-3">
@@ -230,17 +252,37 @@ export function ChipCounter({
               ביטחון {count.confidence === "high" ? "גבוה" : count.confidence === "medium" ? "בינוני" : "נמוך"}
             </Badge>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {count.counts.filter((c) => c.count > 0).map((c) => {
-              const chip = chipSet?.chips.find((x) => x.color === c.color);
+          <div className="space-y-1.5">
+            {(chipSet?.chips ?? []).map((chip) => {
+              const n = fixed[chip.color] ?? 0;
+              const was = count.counts.find((x) => x.color === chip.color)?.count ?? 0;
               return (
-                <span key={c.color} className="num inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 text-xs font-bold">
-                  <ChipDot hex={chip?.hex ?? "#888"} size={14} /> {c.count} × {chip?.value}
-                </span>
+                <div key={chip.color} className="flex items-center gap-2">
+                  <ChipDot hex={chip.hex} size={18} />
+                  <span className="min-w-0 flex-1 truncate text-sm">{chip.color} <span className="num text-xs text-muted">× {chip.value}</span></span>
+                  {n !== was && <span className="num text-[11px] text-muted line-through">{was}</span>}
+                  <button type="button" aria-label={`פחות ${chip.color}`} className="grid size-8 place-items-center rounded-xl bg-surface-2 text-lg font-bold" onClick={() => setColour(chip.color, n - 1)}>−</button>
+                  <input
+                    aria-label={`כמות ${chip.color}`}
+                    className={`num h-8 w-12 rounded-xl border bg-surface-2 text-center text-sm font-bold ${n !== was ? "border-gold text-gold" : "border-line"}`}
+                    inputMode="numeric"
+                    value={n}
+                    onChange={(e) => setColour(chip.color, Number(e.target.value.replace(/\D/g, "")) || 0)}
+                  />
+                  <button type="button" aria-label={`עוד ${chip.color}`} className="grid size-8 place-items-center rounded-xl bg-surface-2 text-lg font-bold" onClick={() => setColour(chip.color, n + 1)}>+</button>
+                </div>
               );
             })}
           </div>
+          <p className="text-[11px] text-muted">הזיהוי טעה? תקן את הכמות לכל צבע והסכום יתעדכן. התיקון נשמר לערכה ועוזר לזיהוי הבא.</p>
           {count.notes && <p className="text-xs text-muted">{count.notes}</p>}
+          <input
+            className={`${inputCls} h-10 text-sm`}
+            placeholder="הערה לזיהוי הבא (לא חובה), למשל: הוורוד נראה אדום באור הזה"
+            value={note}
+            maxLength={300}
+            onChange={(e) => setNote(e.target.value)}
+          />
         </Card>
       )}
       {err && <p className="text-xs text-warn">{err}</p>}
@@ -254,7 +296,7 @@ export function ChipCounter({
         className="w-full"
         disabled={!manual || counting}
         loading={busy}
-        onClick={() => onDone({ total, photo, detected: count?.total ?? null, count, manual: !count || edited })}
+        onClick={finish}
       >
         {cta}
       </Button>

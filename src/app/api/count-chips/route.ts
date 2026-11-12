@@ -18,6 +18,7 @@ const Body = z.object({
     .min(1),
   expected: z.number().optional(),
   tableId: z.string().uuid().optional(),
+  chipSetId: z.string().uuid().optional(),
 });
 
 const Result = z.object({
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
 
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "bad request" }, { status: 400 });
-  const { image, mediaType, chips, tableId } = parsed.data;
+  const { image, mediaType, chips, tableId, chipSetId } = parsed.data;
   if (tableId) {
     const quota = await checkAiQuota(sb, tableId, "count");
     if (quota) return quota;
@@ -49,7 +50,7 @@ export async function POST(req: Request) {
   const palette = chips
     .map((c: Chip) => `- "${c.color}" (color ${c.hex}), value ${c.value}${c.desc ? `. Looks like: ${c.desc}` : ""}`)
     .join("\n");
-  const refs = await referencePhotos(sb, chips);
+  const [refs, lessons] = await Promise.all([referencePhotos(sb, chips), pastCorrections(sb, chipSetId)]);
 
   const client = new Anthropic();
   try {
@@ -71,6 +72,7 @@ export async function POST(req: Request) {
                 `This photo shows one or more stacks of poker chips, usually photographed from the side.\n` +
                 `Count how many chips of each colour are in the photo. The chip set has these colours:\n${palette}\n\n` +
                 (refs.length ? `The reference photos above show real chips of this set (face and side views); match the chips in the photo to them.\n` : "") +
+                (lessons ? `People corrected earlier automatic counts of this same chip set. Learn from these mistakes:\n${lessons}\n` : "") +
                 `Stacks are often lined up side by side in a row. Count edge stripes carefully, stack by stack, then add them up. Use exactly the colour names above in "counts", ` +
                 `one entry per colour (count 0 if absent). Set confidence to "low" if chips are hidden, blurry, ` +
                 `or colours are hard to tell apart, and explain briefly in "notes" (in Hebrew).`,
@@ -125,4 +127,28 @@ async function referencePhotos(sb: Awaited<ReturnType<typeof supabaseServer>>, c
     if (budget <= 0) break;
   }
   return blocks;
+}
+
+/** The latest human fixes and notes for this chip set, as short lines for the prompt. */
+async function pastCorrections(sb: Awaited<ReturnType<typeof supabaseServer>>, chipSetId?: string) {
+  if (!chipSetId) return "";
+  const { data } = await sb
+    .from("chip_corrections")
+    .select("detected, actual, note")
+    .eq("chip_set_id", chipSetId)
+    .order("created_at", { ascending: false })
+    .limit(10);
+  if (!data?.length) return "";
+  type Row = { color: string; count: number };
+  return data
+    .map((r: { detected: Row[] | null; actual: Row[] | null; note: string | null }) => {
+      const diffs = (r.actual ?? [])
+        .map((a) => ({ color: a.color, was: r.detected?.find((d) => d.color === a.color)?.count ?? 0, is: a.count }))
+        .filter((d) => d.was !== d.is)
+        .map((d) => `"${d.color}": counted ${d.was}, really ${d.is}`);
+      const parts = [diffs.length ? diffs.join("; ") : "", r.note ? `note: ${r.note}` : ""].filter(Boolean);
+      return parts.length ? `- ${parts.join(". ")}` : "";
+    })
+    .filter(Boolean)
+    .join("\n");
 }
