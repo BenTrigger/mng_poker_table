@@ -44,6 +44,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
   if (!night || !me) return <Spinner />;
 
   const rate = chipRate(night);
+  const seeAll = t.isAdmin || (t.table?.last_settings?.stats_visibility ?? "all") === "all";
   const closed = night.status === "closed";
   const totalBought = lines.reduce((s, l) => s + l.boughtMoney, 0);
   const nameOf = (id: string) => t.members.find((m) => m.id === id)?.display_name ?? "שחקן";
@@ -53,7 +54,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
     const l = lines.find((x) => x.member_id === p.member_id)!;
     const m = t.members.find((x) => x.id === p.member_id);
     const net = closed ? Number(p.net ?? l.net ?? 0) : l.net;
-    const showNet = closed || p.status === "out";
+    const showNet = (closed || p.status === "out") && (seeAll || p.member_id === me.id);
     return {
       id: p.member_id,
       name: m?.display_name ?? "שחקן",
@@ -105,7 +106,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
         />
 
         {closed ? (
-          <Summary night={night} players={n.players} lines={lines} settlements={n.settlements} members={t.members} meId={me.id} isAdmin={t.isAdmin} reload={n.reload} />
+          <Summary night={night} players={n.players} lines={lines} settlements={n.settlements} members={t.members} meId={me.id} isAdmin={t.isAdmin} reload={n.reload} seeAll={seeAll} />
         ) : (
           <>
             {t.isAdmin && flagged.length > 0 && (
@@ -211,7 +212,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
           canManage={canManage}
         />
       )}
-      <CloseSheet open={sheet === "close"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} pendingCount={pending.length + flagged.length} handovers={n.handovers} />
+      <CloseSheet open={sheet === "close"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} pendingCount={pending.length + flagged.length} handovers={n.handovers} table={t.table!} />
       <AdminSheet open={sheet === "admin"} onClose={() => setSheet(null)} night={night} players={n.players} members={t.members} onHandover={() => setSheet("handover")} />
       <HandoverSheet open={sheet === "handover"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} handovers={n.handovers} />
     </>

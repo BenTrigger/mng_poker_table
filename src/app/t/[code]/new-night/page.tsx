@@ -111,7 +111,7 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
     await sb.from("night_players").insert(selected.map((member_id, seat) => ({ night_id: night.id, member_id, seat })));
     await sb
       .from("poker_tables")
-      .update({ last_settings: { chip_set_id: chipSetId, chips_per_buyin: chipsPer, money_per_buyin: moneyPer, cashier_member_id: cashier, member_ids: selected } })
+      .update({ last_settings: { ...(t.table!.last_settings ?? {}), chip_set_id: chipSetId, chips_per_buyin: chipsPer, money_per_buyin: moneyPer, cashier_member_id: cashier, member_ids: selected } })
       .eq("id", t.table!.id);
     if (signupId) await sb.from("signups").update({ status: "started", night_id: night.id }).eq("id", signupId);
     await logEvent(night.id, "night_opened", { players: selected.length, chips_per_buyin: chipsPer, money_per_buyin: moneyPer, cashier });

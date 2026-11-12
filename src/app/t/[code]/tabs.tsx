@@ -14,6 +14,9 @@ import { UpcomingSignups } from "@/components/signup-section";
 
 export type Ctx = ReturnType<typeof useTable> & { table: PokerTable; me: Member; userId: string; profile: Profile | null };
 
+/** Admins always see everything; players see everyone's results only if the table allows it. */
+export const canSeeAll = (ctx: Pick<Ctx, "isAdmin" | "table">) => ctx.isAdmin || (ctx.table.last_settings?.stats_visibility ?? "all") === "all";
+
 const nameOf = (members: Member[], id: string) => members.find((m) => m.id === id)?.display_name ?? "שחקן";
 const dateStr = (s: string) => new Date(s).toLocaleDateString("he-IL", { weekday: "short", day: "numeric", month: "numeric", year: "2-digit" });
 
@@ -322,7 +325,7 @@ export function HistoryTab({ ctx }: { ctx: Ctx }) {
                 </div>
                 <div className="text-xs text-muted">
                   {ps.length} שחקנים{n.status === "closed" && pot > 0 ? ` · קופה ${formatMoney(pot)}` : ""}
-                  {winner?.net && Number(winner.net) > 0 ? ` · 🏆 ${nameOf(ctx.members, winner.member_id)}` : ""}
+                  {canSeeAll(ctx) && winner?.net && Number(winner.net) > 0 ? ` · 🏆 ${nameOf(ctx.members, winner.member_id)}` : ""}
                 </div>
               </div>
               <ChevronLeft className="size-5 text-muted" />
@@ -350,7 +353,8 @@ export function StatsTab({ ctx }: { ctx: Ctx }) {
       .then(({ data }) => setRows(data ?? []));
   }, [closed]);
 
-  const stats = useMemo(
+  const seeAll = canSeeAll(ctx);
+  const allStats = useMemo(
     () => memberStats(rows.map((r) => ({ member_id: r.member_id, net: Number(r.net), boughtMoney: Number(r.bought_money ?? 0) }))),
     [rows],
   );
@@ -365,6 +369,7 @@ export function StatsTab({ ctx }: { ctx: Ctx }) {
       .map((r) => (acc += Number(r!.net)));
   }, [closed, rows, ctx.me.id]);
 
+  const stats = seeAll ? allStats : allStats.filter((x) => x.member_id === ctx.me.id);
   if (!stats.length) return <Empty icon={<Trophy className="size-7" />} title="אין עדיין נתונים" text="אחרי הערב הסגור הראשון יופיעו כאן דירוג, ממוצעים ושיאים." />;
 
   const me = stats.find((s) => s.member_id === ctx.me.id);
@@ -388,13 +393,14 @@ export function StatsTab({ ctx }: { ctx: Ctx }) {
         </Card>
       )}
 
-      <div className="grid grid-cols-3 gap-2">
+      {!seeAll && <p className="px-1 text-center text-xs text-muted">המנהל הגדיר שכל שחקן רואה רק את הנתונים שלו.</p>}
+      {seeAll && <div className="grid grid-cols-3 gap-2">
         <Award icon={<Trophy className="size-4" />} title="מוביל הטבלה" name={nameOf(ctx.members, top.member_id)} value={formatSigned(top.total)} />
         <Award icon={<Flame className="size-4" />} title="ערב השיא" name={nameOf(ctx.members, bestNight.member_id)} value={formatSigned(bestNight.best)} />
         <Award icon={<Coins className="size-4" />} title="מלך הריביי" name={nameOf(ctx.members, rebuyKing.member_id)} value={formatMoney(rebuyKing.buyinsTotal / rebuyKing.nights)} />
-      </div>
+      </div>}
 
-      <Card className="p-0">
+      {seeAll && <Card className="p-0">
         <div className="flex items-center justify-between px-4 pb-2 pt-4">
           <h2 className="font-bold">טבלת השולחן</h2>
           <span className="text-xs text-muted">{closed.length} ערבים · {formatMoney(totalPot)} עברו בקופה</span>
@@ -415,7 +421,23 @@ export function StatsTab({ ctx }: { ctx: Ctx }) {
             </div>
           ))}
         </div>
-      </Card>
+      </Card>}
+    </div>
+  );
+}
+
+function Choice({ label, value, options, onChange, hint }: { label: string; value: string; options: (readonly [string, string])[]; onChange: (v: string) => void; hint?: string }) {
+  return (
+    <div>
+      <div className="mb-1.5 text-sm font-medium text-muted">{label}</div>
+      <div className="grid grid-cols-2 rounded-2xl bg-surface-2 p-1">
+        {options.map(([v, l]) => (
+          <button key={v} onClick={() => onChange(v)} className={`h-10 rounded-xl text-sm font-bold ${value === v ? "bg-gold text-[#1d1405]" : "text-muted"}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+      {hint && <p className="mt-1.5 text-xs text-muted">{hint}</p>}
     </div>
   );
 }
@@ -466,6 +488,12 @@ export function SettingsTab({ ctx }: { ctx: Ctx }) {
   const [editing, setEditing] = useState<ChipSet | "new" | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const ls = ctx.table.last_settings ?? {};
+  async function saveSetting(patch: Partial<NonNullable<PokerTable["last_settings"]>>) {
+    await supabase().from("poker_tables").update({ last_settings: { ...ls, ...patch } }).eq("id", ctx.table.id);
+    ctx.reload();
+  }
+
   async function saveName() {
     await supabase().from("poker_tables").update({ name: name.trim() }).eq("id", ctx.table.id);
     ctx.reload();
@@ -489,6 +517,29 @@ export function SettingsTab({ ctx }: { ctx: Ctx }) {
         <Button size="sm" variant="soft" disabled={!name.trim() || name === ctx.table.name} onClick={saveName}>
           שמירה
         </Button>
+      </Card>
+
+      <Card className="space-y-4">
+        <Choice
+          label="מי רואה סטטיסטיקות ותוצאות"
+          value={ls.stats_visibility ?? "all"}
+          onChange={(v) => saveSetting({ stats_visibility: v as "all" | "own" })}
+          options={[
+            ["all", "כולם רואים הכל"],
+            ["own", "כל אחד רק את שלו"],
+          ]}
+          hint={(ls.stats_visibility ?? "all") === "own" ? "אתה רואה את כולם, ויכול לשתף את הסיכום בוואטסאפ בסוף הערב." : undefined}
+        />
+        <Choice
+          label="התחשבנות בסוף ערב (ברירת מחדל)"
+          value={ls.settle_mode ?? "players"}
+          onChange={(v) => saveSetting({ settle_mode: v as "players" | "cashier" })}
+          options={[
+            ["players", "חלוקה אוטומטית"],
+            ["cashier", "הכל דרך הקופאי"],
+          ]}
+          hint={(ls.settle_mode ?? "players") === "players" ? "מינימום העברות בין השחקנים." : "המפסידים משלמים לקופאי, והקופאי משלם למנצחים."}
+        />
       </Card>
 
       <section>

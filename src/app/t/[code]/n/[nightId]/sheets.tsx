@@ -3,10 +3,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, Check, X, AlertTriangle, Pencil, Share2, Landmark, UserPlus, LogOut, ImageIcon, Sparkles, Trash2, ArrowLeftRight } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { logEvent } from "@/lib/hooks";
-import { balanceNets, chipCheck, chipRate, chipsToMoney, formatMoney, formatSigned, moneyToChips, round2, settle, type PlayerLine } from "@/lib/calc";
+import { balanceNets, chipCheck, chipRate, chipsToMoney, formatMoney, formatSigned, moneyToChips, round2, settle, settleViaHub, type PlayerLine, type SettleMode } from "@/lib/calc";
 import { breakdown, chipCountingEnabled, countChipsFromPhoto } from "@/lib/chips";
 import { compressImage } from "@/lib/image";
-import type { CashierHandover, ChipCount, ChipRequest, ChipSet, GameNight, Member, NightEvent, NightPlayer, Settlement } from "@/lib/types";
+import type { PokerTable, CashierHandover, ChipCount, ChipRequest, ChipSet, GameNight, Member, NightEvent, NightPlayer, Settlement } from "@/lib/types";
 import { Avatar, Badge, Button, Card, ChipDot, Field, Sheet, inputCls } from "@/components/ui";
 
 export const nameOf = (members: Member[], id: string) => members.find((m) => m.id === id)?.display_name ?? "שחקן";
@@ -607,11 +607,13 @@ export function AdminSheet({
 // End of night: count everyone, check the gap, settle and close
 // ---------------------------------------------------------------------------
 export function CloseSheet({
-  open, onClose, night, players, lines, members, chipSet, pendingCount, handovers = [],
+  open, onClose, night, players, lines, members, chipSet, pendingCount, handovers = [], table,
 }: {
-  open: boolean; onClose: () => void; night: GameNight; players: NightPlayer[]; lines: PlayerLine[]; members: Member[]; chipSet: ChipSet | null; pendingCount: number; handovers?: CashierHandover[];
+  open: boolean; onClose: () => void; night: GameNight; players: NightPlayer[]; lines: PlayerLine[]; members: Member[]; chipSet: ChipSet | null; pendingCount: number; handovers?: CashierHandover[]; table: PokerTable;
 }) {
   const rate = chipRate(night);
+  const cashierId = night.cashier_member_id;
+  const [mode, setMode] = useState<SettleMode>(table.last_settings?.settle_mode === "cashier" && cashierId ? "cashier" : "players");
   const playing = players.filter((p) => p.status === "playing");
   const [counts, setCounts] = useState<Record<string, { total: number; photo: Blob | null }>>({});
   const [counting, setCounting] = useState<string | null>(null);
@@ -636,8 +638,8 @@ export function CloseSheet({
     });
     const balanced = balanceNets(live, fixedTotal);
     const nets = [...balanced, ...fixed.map((p) => ({ id: p.member_id, net: Number(p.net ?? 0) }))];
-    return { nets, transfers: settle(nets) };
-  }, [allCounted, players, playing, lines, counts, rate]);
+    return { nets, transfers: mode === "cashier" && cashierId ? settleViaHub(nets, cashierId) : settle(nets) };
+  }, [allCounted, players, playing, lines, counts, rate, mode, cashierId]);
 
   async function finish() {
     if (!preview) return;
@@ -655,7 +657,9 @@ export function CloseSheet({
     if (preview.transfers.length) {
       await sb.from("settlements").insert(preview.transfers.map((t) => ({ night_id: night.id, from_member: t.from, to_member: t.to, amount: t.amount })));
     }
-    await logEvent(night.id, "night_closed", { gap_chips: gapChips, transfers: preview.transfers.length });
+    await logEvent(night.id, "night_closed", { gap_chips: gapChips, transfers: preview.transfers.length, settle_mode: mode });
+    // remember the choice for next time
+    await sb.from("poker_tables").update({ last_settings: { ...(table.last_settings ?? {}), settle_mode: mode } }).eq("id", table.id);
     // photos are only kept until the night is closed and balanced
     const { data: files } = await sb.storage.from("chip-photos").list(night.id, { limit: 1000 });
     if (files?.length) await sb.storage.from("chip-photos").remove(files.map((f) => `${night.id}/${f.name}`));
@@ -748,6 +752,19 @@ export function CloseSheet({
                 ))}
               </div>
             )}
+            {cashierId && (
+              <div className="grid grid-cols-2 rounded-2xl bg-surface-2 p-1">
+                {([
+                  ["players", "חלוקה אוטומטית", "מינימום העברות בין השחקנים"],
+                  ["cashier", "הכל דרך הקופאי", `כולם מתחשבנים מול ${nameOf(members, cashierId)}`],
+                ] as const).map(([m, label, sub]) => (
+                  <button key={m} onClick={() => setMode(m)} className={`rounded-xl px-2 py-2 text-center ${mode === m ? "bg-gold text-[#1d1405]" : "text-muted"}`}>
+                    <div className="text-sm font-bold">{label}</div>
+                    <div className={`text-[10px] ${mode === m ? "text-[#1d1405]/70" : "text-muted"}`}>{sub}</div>
+                  </button>
+                ))}
+              </div>
+            )}
             <Transfers transfers={preview.transfers} members={members} />
             <Button size="lg" className="w-full" loading={busy} onClick={finish}>
               <Check className="size-5" /> סגירה סופית
@@ -781,11 +798,14 @@ function Transfers({ transfers, members }: { transfers: { from: string; to: stri
 // Closed night summary
 // ---------------------------------------------------------------------------
 export function Summary({
-  night, players, lines, settlements, members, meId, isAdmin, reload,
+  night, players, lines, settlements: allSettlements, members, meId, isAdmin, reload, seeAll = true,
 }: {
-  night: GameNight; players: NightPlayer[]; lines: PlayerLine[]; settlements: Settlement[]; members: Member[]; meId: string; isAdmin: boolean; reload: () => void;
+  night: GameNight; players: NightPlayer[]; lines: PlayerLine[]; settlements: Settlement[]; members: Member[]; meId: string; isAdmin: boolean; reload: () => void; seeAll?: boolean;
 }) {
-  const ranked = [...players].sort((a, b) => Number(b.net ?? 0) - Number(a.net ?? 0));
+  const allRanked = [...players].sort((a, b) => Number(b.net ?? 0) - Number(a.net ?? 0));
+  // when the table hides others' results, a player sees only their own line and transfers
+  const ranked = seeAll ? allRanked : allRanked.filter((p) => p.member_id === meId);
+  const settlements = seeAll ? allSettlements : allSettlements.filter((s) => s.from_member === meId || s.to_member === meId);
   const date = new Date(night.started_at).toLocaleDateString("he-IL", { day: "numeric", month: "numeric", year: "2-digit" });
 
   const shareText = [
@@ -804,11 +824,13 @@ export function Summary({
 
   return (
     <div className="space-y-4">
-      <a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer" className="block">
-        <Button size="lg" className="w-full">
-          <Share2 className="size-5" /> שיתוף הסיכום לוואטסאפ
-        </Button>
-      </a>
+      {seeAll && (
+        <a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer" className="block">
+          <Button size="lg" className="w-full">
+            <Share2 className="size-5" /> שיתוף הסיכום לוואטסאפ
+          </Button>
+        </a>
+      )}
 
       <Card className="p-0">
         <div className="divide-y divide-line">

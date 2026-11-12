@@ -22,6 +22,10 @@ export type LastSettings = {
   money_per_buyin?: number;
   cashier_member_id?: string;
   member_ids?: string[];
+  /** how the night's debts are settled: minimal transfers between players, or all through the cashier */
+  settle_mode?: "players" | "cashier";
+  /** "all": everyone sees everyone's results; "own": players see only their own (admins see all) */
+  stats_visibility?: "all" | "own";
 };
 
 export type Member = {

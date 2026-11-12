@@ -114,6 +114,22 @@ export function settle(nets: { id: string; net: number }[]): Transfer[] {
 }
 
 /**
+ * Everything goes through one person (the cashier): losers pay the cashier,
+ * the cashier pays the winners. The cashier's own result is netted out.
+ */
+export function settleViaHub(nets: { id: string; net: number }[], hubId: string): Transfer[] {
+  const out: Transfer[] = [];
+  for (const n of nets) {
+    if (n.id === hubId) continue;
+    if (n.net < -0.004) out.push({ from: n.id, to: hubId, amount: round2(-n.net) });
+    else if (n.net > 0.004) out.push({ from: hubId, to: n.id, amount: round2(n.net) });
+  }
+  return out;
+}
+
+export type SettleMode = "players" | "cashier";
+
+/**
  * When counted chips at the end differ from chips handed out, spread the
  * difference across players proportionally to their final stacks so the
  * night balances to zero. Returns adjusted nets.
