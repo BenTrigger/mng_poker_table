@@ -33,9 +33,9 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
     else setState("pending");
   }
 
-  // personal invite links join immediately
+  // the link (or the code) is the invite: join at once, straight into the table
   useEffect(() => {
-    if (user && name && new URLSearchParams(location.search).get("m")) join();
+    if (user && name) join();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, name]);
 

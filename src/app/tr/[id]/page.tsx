@@ -72,7 +72,9 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
   }
 
   const { table, entries } = view;
-  const myId = view.me?.status === "active" ? view.me.id : null;
+  // a player who joined through this link holds their place while the admin approves them
+  const myId = view.me && view.me.status !== "removed" ? view.me.id : null;
+  const awaitingApproval = view.me?.status === "pending" && !!myId;
   const mine = entries.find((e) => e.member_id === myId) ?? null;
   const cap = t.table_count * t.seats_per_table;
   const inList = entries.filter((e) => e.status !== "waiting");
@@ -305,6 +307,9 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
             )}
             {!isAdmin && !mine && !regOpen && <p className="w-full py-3 text-center text-sm text-muted">ההרשמה סגורה</p>}
           </div>
+          {awaitingApproval && mine && (
+            <p className="mx-auto mt-2 max-w-lg text-center text-xs text-muted">המקום שמור לך. המנהל צריך לאשר אותך לשולחן, ואז תראה גם את הערבים והתוצאות.</p>
+          )}
         </div>
       )}
 

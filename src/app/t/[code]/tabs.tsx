@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Plus, Share2, Mail, Check, X, Crown, Trash2, UserPlus, Copy, CalendarDays, ChevronLeft, Trophy, Flame, TrendingDown, Coins, Spade, Pencil, Link2,
@@ -371,7 +371,7 @@ export function HistoryTab({ ctx }: { ctx: Ctx }) {
   useEffect(() => {
     const ids = ctx.nights.map((n) => n.id);
     if (!ids.length) return;
-    supabase().from("night_players").select("*").in("night_id", ids).then(({ data }) => setPlayers(data ?? []));
+    supabase().from("night_players_view").select("*").in("night_id", ids).then(({ data }) => setPlayers(data ?? []));
   }, [ctx.nights]);
 
   if (!ctx.nights.length) return <Empty icon={<CalendarDays className="size-7" />} title="עוד לא שיחקתם" text="ערבים שנסגרו יופיעו כאן עם סיכום מלא." />;
@@ -443,7 +443,7 @@ function CashStats({ ctx }: { ctx: Ctx }) {
   useEffect(() => {
     if (!closed.length) return;
     supabase()
-      .from("night_players")
+      .from("night_players_view")
       .select("*")
       .in("night_id", closed.map((n) => n.id))
       .not("net", "is", null)
@@ -585,9 +585,15 @@ export function SettingsTab({ ctx }: { ctx: Ctx }) {
   const [editing, setEditing] = useState<ChipSet | "new" | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const ls = ctx.table.last_settings ?? {};
+  // two quick taps must not overwrite each other: every change since the page
+  // loaded rides along with the next save, and shows at once
+  const changed = useRef<Partial<NonNullable<PokerTable["last_settings"]>>>({});
+  const [, setChanged] = useState(changed.current);
+  const ls = { ...(ctx.table.last_settings ?? {}), ...changed.current };
   async function saveSetting(patch: Partial<NonNullable<PokerTable["last_settings"]>>) {
-    await supabase().from("poker_tables").update({ last_settings: { ...ls, ...patch } }).eq("id", ctx.table.id);
+    changed.current = { ...changed.current, ...patch };
+    setChanged(changed.current);
+    await supabase().from("poker_tables").update({ last_settings: { ...(ctx.table.last_settings ?? {}), ...changed.current } }).eq("id", ctx.table.id);
     ctx.reload();
   }
 

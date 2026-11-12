@@ -1,6 +1,6 @@
 "use client";
-import { useMemo, useState } from "react";
-import { Share2, Undo2, Lock } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Share2, Undo2, Lock, Check } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { results, tournamentResultText, upfrontPayouts } from "@/lib/tournament";
 import { formatMoney, formatSigned, settle, settleViaHub } from "@/lib/calc";
@@ -14,19 +14,51 @@ export function ResultsView({ view, isAdmin, myId, run }: { view: TournamentView
   // same rule as the table's statistics: "own" = players see only their own money (admins see all)
   const seeAll = isAdmin || table.stats_visibility === "all";
   const hub = table.settle_mode === "cashier" ? view.organizer_member_id : null;
-  const [mode, setMode] = useState<"players" | "hub">(hub ? "hub" : "players");
+  const saved = useMemo(() => view.transfers ?? [], [view.transfers]);
+  // once saved, the switch shows how the saved transfers were made
+  const [mode, setMode] = useState<"players" | "hub">(() => {
+    const org = view.organizer_member_id;
+    if (saved.length && org) return saved.every((x) => x.from_member === org || x.to_member === org) ? "hub" : "players";
+    return hub ? "hub" : "players";
+  });
 
   const rows = useMemo(() => results(t, entries), [t, entries]);
   const name = (memberId: string) => entries.find((e) => e.member_id === memberId)?.display_name ?? "המארגן";
   const nets = rows.map((r) => ({ id: r.member_id, net: r.net }));
   // cash paid at the door: the organizer holds the pot and pays out the prizes
   const upfront = t.payment_mode === "upfront";
-  const transfers = upfront
-    ? upfrontPayouts(rows, view.organizer_member_id ?? "")
-    : mode === "hub" && view.organizer_member_id
-      ? settleViaHub(nets, view.organizer_member_id)
-      : settle(nets);
+  // worked out on the admin's screen (only the admin sees every prize), then saved for everyone
+  const planned = useMemo(
+    () =>
+      upfront
+        ? upfrontPayouts(rows, view.organizer_member_id ?? "")
+        : mode === "hub" && view.organizer_member_id
+          ? settleViaHub(nets, view.organizer_member_id)
+          : settle(nets),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, mode, upfront, view.organizer_member_id],
+  );
+  const anyPaid = saved.some((x) => x.paid);
+  const key = (from: string, to: string, amount: number) => `${from}>${to}:${Math.round(Number(amount) * 100)}`;
+  const sameAsSaved =
+    planned.map((p) => key(p.from, p.to, p.amount)).sort().join() === saved.map((x) => key(x.from_member, x.to_member, x.amount)).sort().join();
+  const saving = useRef(false);
+  useEffect(() => {
+    if (!isAdmin || anyPaid || sameAsSaved || saving.current) return;
+    saving.current = true;
+    supabase()
+      .rpc("save_tournament_transfers", { p_id: t.id, p_transfers: planned.map((x) => ({ from: x.from, to: x.to, amount: x.amount })) })
+      .then(() => {
+        saving.current = false;
+      });
+  }, [isAdmin, anyPaid, sameAsSaved, planned, t.id]);
+  const transfers =
+    saved.length || !isAdmin
+      ? saved.map((x) => ({ id: x.id, from: x.from_member, to: x.to_member, amount: Number(x.amount), paid: x.paid })).sort((a, b) => b.amount - a.amount)
+      : planned.map((x) => ({ id: "", from: x.from, to: x.to, amount: x.amount, paid: false }));
   const visibleTransfers = seeAll ? transfers : transfers.filter((x) => x.from === myId || x.to === myId);
+  const markPaid = (id: string, paid: boolean) =>
+    run("paid", () => supabase().from("tournament_transfers").update({ paid, paid_at: paid ? new Date().toISOString() : null }).eq("id", id), paid ? "סומן ששולם" : "הסימון בוטל");
   const shareText = tournamentResultText(
     t,
     rows.map((r) => ({ name: name(r.member_id), place: r.place, prize: r.prize, net: r.net })),
@@ -88,7 +120,7 @@ export function ResultsView({ view, isAdmin, myId, run }: { view: TournamentView
       <section>
         <div className="mb-2 flex items-center justify-between px-1">
           <h2 className="text-sm font-bold text-muted">{upfront ? "המארגן משלם את הפרסים" : "מי מעביר למי"}</h2>
-          {view.organizer_member_id && !upfront && (
+          {view.organizer_member_id && !upfront && isAdmin && !anyPaid && (
             <div className="flex gap-1 rounded-xl bg-surface-2 p-1 text-xs font-bold">
               <button className={`rounded-lg px-2 py-1 ${mode === "players" ? "bg-gold text-[#1d1405]" : "text-muted"}`} onClick={() => setMode("players")}>
                 בין השחקנים
@@ -103,14 +135,30 @@ export function ResultsView({ view, isAdmin, myId, run }: { view: TournamentView
           {visibleTransfers.length === 0 ? (
             <p className="text-center text-sm text-muted">{upfront ? "כולם שילמו בכניסה. אין העברות." : "אין העברות."}</p>
           ) : (
-            visibleTransfers.map((x, i) => (
-              <div key={i} className="flex items-center gap-2 text-sm">
-                <b className={x.from === myId ? "text-loss" : ""}>{name(x.from)}</b>
-                <span className="text-muted">מעביר ל</span>
-                <b className={x.to === myId ? "text-win" : ""}>{name(x.to)}</b>
-                <span className="num mr-auto font-extrabold">{formatMoney(x.amount)}</span>
-              </div>
-            ))
+            visibleTransfers.map((x, i) => {
+              const canMark = !!x.id && (isAdmin || x.to === myId);
+              return (
+                <div key={x.id || i} className="flex items-center gap-2 text-sm">
+                  <b className={x.from === myId ? "text-loss" : ""}>{name(x.from)}</b>
+                  <span className="text-muted">מעביר ל</span>
+                  <b className={x.to === myId ? "text-win" : ""}>{name(x.to)}</b>
+                  <span className="num mr-auto font-extrabold">{formatMoney(x.amount)}</span>
+                  {x.paid ? (
+                    canMark ? (
+                      <button className="text-xs font-bold text-win" onClick={() => markPaid(x.id, false)} aria-label={`בטל סימון ששולם: ${name(x.from)} ל${name(x.to)}`}>
+                        ✅ שולם
+                      </button>
+                    ) : (
+                      <span className="text-xs font-bold text-win">✅ שולם</span>
+                    )
+                  ) : canMark ? (
+                    <Button size="sm" variant="soft" onClick={() => markPaid(x.id, true)} aria-label={`קיבלתי: ${name(x.from)} ל${name(x.to)}`}>
+                      <Check className="size-4" /> קיבלתי
+                    </Button>
+                  ) : null}
+                </div>
+              );
+            })
           )}
         </Card>
       </section>

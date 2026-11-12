@@ -28,6 +28,7 @@ export function useTournament(id: string, enabled: boolean) {
       .channel(`tournament-${id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "tournament_entries", filter: `tournament_id=eq.${id}` }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "tournaments", filter: `id=eq.${id}` }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "tournament_transfers", filter: `tournament_id=eq.${id}` }, load)
       .subscribe();
     const vis = () => document.visibilityState === "visible" && load();
     document.addEventListener("visibilitychange", vis);
@@ -50,7 +51,7 @@ export function useTableTournaments(tableId: string) {
   const load = useCallback(async () => {
     const { data } = await supabase()
       .from("tournaments")
-      .select("*, entries:tournament_entries(member_id, status, place, prize, rebuys, addon)")
+      .select("*, entries:tournament_results_view(member_id, status, place, prize, rebuys, addon)")
       .eq("table_id", tableId)
       .order("starts_at", { ascending: false });
     setRows((data as TournamentRow[] | null) ?? []);

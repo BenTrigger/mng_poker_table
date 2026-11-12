@@ -63,7 +63,8 @@ test("a two-table tournament from registration to payouts", async ({ browser, ba
     await expect(by("זיו").page.getByText("אתה רשום")).toBeVisible();
     const e = await entries();
     expect(e.filter((x) => x.status === "registered").map((x) => x.name).sort()).toEqual(["אורי", "בר", "גיא", "דנה", "הילה", "זיו"].sort());
-    // registering also made them table members, without the admin approving (by design: the link is the invite)
+    // registering from the link joined them to the table at once (the link is the invite)
+    expect((await db().from("table_members").select("status").eq("table_id", (await db().from("tournaments").select("table_id").eq("id", tid).single()).data!.table_id).neq("status", "active")).data).toEqual([]);
     // a player cannot start the tournament
     const { error } = await by("אורי").api.rpc("start_tournament", { p_id: tid });
     expect(error?.message).toContain("admin only");
@@ -142,6 +143,26 @@ test("a two-table tournament from registration to payouts", async ({ browser, ba
     expect(e.find((x) => x.place === 1)!.name).toBe(alive[0].name);
     const nets = e.map((x) => Number(x.prize ?? 0) - 100 - x.rebuys * 100 - (x.addon ? 100 : 0));
     expect(nets.reduce((a, b) => a + b, 0)).toBe(0);
+
+    // "who pays whom" is saved, adds up to each player's result, and the winner marks what they got
+    await expect.poll(async () => (await db().from("tournament_transfers").select("id").eq("tournament_id", tid)).data!.length).toBeGreaterThan(0);
+    const { data: transfers } = await db().from("tournament_transfers").select("*").eq("tournament_id", tid);
+    for (const x of e) {
+      const net = Number(x.prize ?? 0) - 100 - x.rebuys * 100 - (x.addon ? 100 : 0);
+      const flow = transfers!.reduce((a, t) => a + (t.to_member === x.member_id ? Number(t.amount) : 0) - (t.from_member === x.member_id ? Number(t.amount) : 0), 0);
+      expect(Math.round(flow * 100) / 100, `transfers of ${x.name}`).toBe(net);
+    }
+    const winner = by(alive[0].name);
+    const toWinner = transfers!.filter((t) => t.to_member === e.find((x) => x.place === 1)!.member_id);
+    expect(toWinner.length).toBeGreaterThan(0);
+    const debtor = players.find((p) => e.find((x) => x.name === p.name)?.member_id === toWinner[0].from_member)!;
+    const { data: selfPaid } = await debtor.api.from("tournament_transfers").update({ paid: true }).eq("id", toWinner[0].id).select();
+    expect(selfPaid).toEqual([]);
+    await winner.page.goto(tUrl);
+    await winner.page.getByRole("button", { name: new RegExp(`^קיבלתי: ${debtor.name}`) }).click();
+    await expect.poll(async () => (await db().from("tournament_transfers").select("paid").eq("id", toWinner[0].id).single()).data!.paid).toBe(true);
+    await debtor.page.goto(tUrl);
+    await expect(debtor.page.getByText("✅ שולם").first()).toBeVisible();
 
     // everyone sees the result
     for (const pl of players.slice(0, 3)) {

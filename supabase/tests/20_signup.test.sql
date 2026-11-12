@@ -20,7 +20,7 @@ select tests.throws(format($$ insert into signups (table_id, starts_at) values (
 select tests.eq((public.get_signup(tests.id('signup'))->>'me'), null, 'link works before joining the table');
 select tests.eq((public.get_signup(tests.id('signup'))->'table'->>'name'), 'Signup table', 'link shows the table name');
 select tests.eq(public.claim_seat(tests.id('signup'), 2), 2, 'a player picks seat 2 from the link');
-select tests.eq((select status from table_members where table_id = tests.id('table') and user_id = tests.id('p1')), 'active', 'taking a seat joins the table');
+select tests.eq((select status from table_members where table_id = tests.id('table') and user_id = tests.id('p1')), 'active', 'taking a seat joins the table (the link is the invite)');
 select tests.eq(public.claim_seat(tests.id('signup'), 3), 3, 'a player can move to another free seat');
 select tests.throws(format($$ select public.claim_seat(%L, 9) $$, tests.id('signup')), '%no such seat%', 'seat number beyond the table is refused');
 reset role;

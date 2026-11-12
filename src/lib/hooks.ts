@@ -110,7 +110,7 @@ export function useNight(nightId: string, enabled: boolean) {
     const sb = supabase();
     const [n, p, r, e, s, h] = await Promise.all([
       sb.from("game_nights").select("*").eq("id", nightId).maybeSingle(),
-      sb.from("night_players").select("*").eq("night_id", nightId).order("seat"),
+      sb.from("night_players_view").select("*").eq("night_id", nightId).order("seat"),
       sb.from("chip_requests").select("*").eq("night_id", nightId).order("created_at"),
       sb.from("night_events").select("*").eq("night_id", nightId).order("created_at", { ascending: false }).limit(200),
       sb.from("settlements").select("*").eq("night_id", nightId),
