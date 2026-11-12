@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { wazeUrl, type LatLng } from "./waze";
 import { supabase } from "./supabase/client";
 import type { Signup, SignupSeat, SignupView } from "./types";
 
@@ -17,7 +18,7 @@ export const waitingList = (seats: SignupSeat[]) =>
   seats.filter((s) => s.seat === null).sort((a, b) => a.created_at.localeCompare(b.created_at));
 
 /** WhatsApp message for the sign-up: when, where, who is in, how many seats are left, and the link */
-export function signupShareText(tableName: string, s: Signup, seats: SignupSeat[], link: string) {
+export function signupShareText(tableName: string, s: Signup, seats: SignupSeat[], link: string, at?: LatLng | null) {
   const map = seatMap(seats, s.seats);
   const taken = map.filter(Boolean) as SignupSeat[];
   const free = s.seats - taken.length;
@@ -27,7 +28,7 @@ export function signupShareText(tableName: string, s: Signup, seats: SignupSeat[
     `📅 ${signupDate(s.starts_at)} בשעה ${signupTime(s.starts_at)}`,
   ];
   if (s.location) lines.push(`🏠 מארח: ${s.location}`);
-  if (s.address) lines.push(`📍 ${s.address}`, `🚗 ניווט בוויז: ${wazeUrl(s.address)}`);
+  if (s.address) lines.push(`📍 ${s.address}`, `🚗 ניווט בוויז: ${wazeUrl(s.address, at)}`);
   if (s.note) lines.push(`📝 ${s.note}`);
   lines.push("");
   if (taken.length) {
@@ -41,8 +42,6 @@ export function signupShareText(tableName: string, s: Signup, seats: SignupSeat[
   return lines.join("\n");
 }
 
-/** Open the address in Waze and start navigating */
-export const wazeUrl = (address: string) => `https://waze.com/ul?q=${encodeURIComponent(address)}&navigate=yes`;
 
 export const whatsappUrl = (text: string) => `https://wa.me/?text=${encodeURIComponent(text)}`;
 
