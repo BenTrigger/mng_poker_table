@@ -3,15 +3,21 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  CalendarClock, MapPin, Share2, Copy, Check, Lock, LockOpen, Play, Hourglass, LogOut, Minus, Plus, Ban, UserPlus, ArrowDownToLine, Trash2, Armchair,
+  CalendarClock, MapPin, Share2, Copy, Check, Lock, LockOpen, Play, Hourglass, LogOut, Minus, Plus, Ban, UserPlus, ArrowDownToLine, Trash2, Armchair, Pencil,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/hooks";
 import { PokerTable, type Seat } from "@/components/poker-table";
 import { TopBar } from "@/components/top-bar";
-import { Avatar, Badge, Button, Card, Empty, Sheet, Spinner, Toast } from "@/components/ui";
+import { Avatar, Badge, Button, Card, Empty, Field, Sheet, Spinner, Toast, inputCls } from "@/components/ui";
 import { seatMap, signupDate, signupError, signupLink, signupShareText, signupTime, useSignup, waitingList, whatsappUrl } from "@/lib/signup";
 import type { Member, SignupSeat } from "@/lib/types";
+
+/** Date as a value for <input type="datetime-local"> in local time */
+function toLocalInput(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 const STATUS = {
   open: { label: "ההרשמה פתוחה", tone: "win" },
@@ -30,6 +36,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
   const [copied, setCopied] = useState(false);
   const [seatSheet, setSeatSheet] = useState<number | null>(null); // seat number the admin/player tapped
   const [members, setMembers] = useState<Member[]>([]);
+  const [edit, setEdit] = useState<{ startsAt: string; place: string; note: string } | null>(null);
 
   const isAdmin = view?.me?.role === "admin" && view.me.status === "active";
   const tableId = view?.table.id;
@@ -92,6 +99,24 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
   const setStatus = (status: "open" | "closed" | "cancelled") =>
     run("status", () => supabase().from("signups").update({ status }).eq("id", s.id), status === "open" ? "ההרשמה נפתחה" : status === "closed" ? "ההרשמה נסגרה" : "הערב בוטל");
 
+  const editable = isAdmin && (s.status === "open" || s.status === "closed");
+  const openEdit = () => setEdit({ startsAt: toLocalInput(new Date(s.starts_at)), place: s.location ?? "", note: s.note ?? "" });
+  async function saveEdit() {
+    if (!edit?.startsAt) return;
+    const ok = await run(
+      "edit",
+      () =>
+        supabase()
+          .from("signups")
+          .update({ starts_at: new Date(edit.startsAt).toISOString(), location: edit.place.trim() || null, note: edit.note.trim() || null })
+          .eq("id", s.id)
+          .select("id")
+          .single(),
+      "הפרטים עודכנו",
+    );
+    if (ok) setEdit(null);
+  }
+
   function tapSeat(i: number) {
     const who = map[i];
     if (isAdmin) return setSeatSheet(i + 1);
@@ -117,7 +142,14 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
         <Card className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="font-[family-name:var(--font-display)] text-2xl font-extrabold">{signupDate(s.starts_at)}</div>
-            <Badge tone={STATUS[s.status].tone}>{STATUS[s.status].label}</Badge>
+            <div className="flex items-center gap-2">
+              <Badge tone={STATUS[s.status].tone}>{STATUS[s.status].label}</Badge>
+              {editable && (
+                <Button size="sm" variant="soft" onClick={openEdit} aria-label="עריכת תאריך ופרטים">
+                  <Pencil className="size-4" /> עריכה
+                </Button>
+              )}
+            </div>
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
             <span className="inline-flex items-center gap-1">
@@ -308,6 +340,25 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
             onTakeMyself={async () => (await claim(seatSheet)) && setSeatSheet(null)}
             canTakeMyself={!sheetWho && open && mine?.seat !== seatSheet}
           />
+        )}
+      </Sheet>
+      <Sheet open={!!edit} onClose={() => setEdit(null)} title="עריכת פרטי הערב">
+        {edit && (
+          <div className="space-y-4">
+            <Field label="מתי">
+              <input type="datetime-local" className={inputCls} value={edit.startsAt} onChange={(e) => setEdit({ ...edit, startsAt: e.target.value })} />
+            </Field>
+            <Field label="איפה (לא חובה)">
+              <input className={inputCls} value={edit.place} onChange={(e) => setEdit({ ...edit, place: e.target.value })} />
+            </Field>
+            <Field label="הערה (לא חובה)">
+              <input className={inputCls} value={edit.note} onChange={(e) => setEdit({ ...edit, note: e.target.value })} />
+            </Field>
+            <p className="text-xs text-muted">הרשומים נשארים במקומות שלהם. כדאי לשתף שוב בוואטסאפ כדי שכולם יראו את התאריך החדש.</p>
+            <Button className="w-full" size="lg" disabled={!edit.startsAt} loading={busy === "edit"} onClick={saveEdit}>
+              <Check className="size-5" /> שמירה
+            </Button>
+          </div>
         )}
       </Sheet>
     </>

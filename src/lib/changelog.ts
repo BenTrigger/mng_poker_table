@@ -6,6 +6,15 @@ export type Release = { version: string; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.4.2",
+    date: "2026-11-12",
+    title: "עריכת תאריך של ערב",
+    items: [
+      "מנהל השולחן יכול לשנות את התאריך, השעה, המקום וההערה של הרשמה מוקדמת (כפתור \"עריכה\" בדף ההרשמה)",
+      "הרשומים נשארים במקומות שלהם; רק המנהל יכול לערוך",
+    ],
+  },
+  {
     version: "1.4.1",
     date: "2026-11-12",
     title: "תיקון התקנת האפליקציה",
