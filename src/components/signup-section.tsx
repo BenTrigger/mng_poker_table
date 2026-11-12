@@ -123,7 +123,7 @@ export function UpcomingSignups({ tableId, isAdmin }: { tableId: string; isAdmin
           <Field label="מתי">
             <input type="datetime-local" className={inputCls} value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
           </Field>
-          <Field label="כמה מקומות בשולחן" hint="מי שנרשם אחרי שהשולחן מלא נכנס לרשימת המתנה ועולה אוטומטית כשמתפנה מקום.">
+          <Field group label="כמה מקומות בשולחן" hint="מי שנרשם אחרי שהשולחן מלא נכנס לרשימת המתנה ועולה אוטומטית כשמתפנה מקום.">
             <div className="flex flex-wrap gap-2">
               {[4, 5, 6, 7, 8, 9, 10].map((n) => (
                 <button

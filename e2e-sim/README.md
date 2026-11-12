@@ -24,6 +24,17 @@ What happens in the night:
 After every step the database is checked: debts, events in the log, nets that sum
 to exactly zero, transfers that match the nets.
 
+Two more scenarios run the same way:
+
+- `signup-and-rules.sim.ts`: joining by code (approve, reject, wrong code), a
+  personal invite link, early sign-up with seats, a waiting list, address edits
+  seen live, cancelling a seat (players and the admin, also after registration
+  closes), "each sees only their own" results, settling everything through the
+  cashier, and what a player must not be able to do through the API.
+- `tournament.sim.ts`: a two-table tournament from registration (waiting list,
+  a drop-out) through the seat draw, bust-outs, a rebuy, an add-on, table
+  balancing and the final, with prizes that add up to the pool.
+
 Chip recognition is mocked in the browser (`/api/count-chips`), so each photo
 "sees" exactly what the scenario says and no AI credit is used.
 
@@ -36,5 +47,5 @@ npm run test:sim
 ```
 
 The script starts the local stack (`supabase start`), refuses to run if the API
-is not local, builds the app against it and runs the scenario. CI runs it on
+is not local, builds the app against it and runs the scenarios (`npm run test:sim -- tournament` runs one). CI runs it on
 every push.

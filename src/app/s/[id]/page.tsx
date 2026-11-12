@@ -82,6 +82,9 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
   const taken = map.filter(Boolean).length;
   const free = s.seats - taken;
   const open = s.status === "open";
+  // a seat can be given up until the night itself is opened, also after registration closed
+  const canLeave = !!mine && (s.status === "open" || s.status === "closed");
+  const askLeave = () => confirm(mine?.seat ? `לבטל את הכיסא שלך (מקום ${mine.seat})?` : "לצאת מרשימת ההמתנה?") && leave();
   const link = signupLink(location.origin, s.id);
   const shareText = signupShareText(table.name, s, seats, link, at);
 
@@ -97,7 +100,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
 
   const claim = (seat: number | null) =>
     run("claim", () => supabase().rpc("claim_seat", { p_signup: s.id, p_seat: seat }), seat ? `תפסת את מקום ${seat}` : undefined);
-  const leave = () => run("leave", () => supabase().rpc("leave_signup", { p_signup: s.id }), "יצאת מההרשמה");
+  const leave = () => run("leave", () => supabase().rpc("leave_signup", { p_signup: s.id }), "ההרשמה שלך בוטלה");
   const adminSeat = (member: string, seat: number | null) =>
     run("admin", () => supabase().rpc("admin_seat", { p_signup: s.id, p_member: member, p_seat: seat }));
   // Admin: add a guest by name (no Google account) straight into a seat (0 = waiting list)
@@ -313,9 +316,9 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
                     </>
                   )}
                 </div>
-                {open && (
-                  <Button size="lg" variant="danger" loading={busy === "leave"} onClick={() => confirm("לצאת מההרשמה?") && leave()}>
-                    <LogOut className="size-5" /> יציאה
+                {canLeave && (
+                  <Button size="lg" variant="danger" loading={busy === "leave"} onClick={askLeave}>
+                    <LogOut className="size-5" /> ביטול הרשמה
                   </Button>
                 )}
               </>
@@ -342,6 +345,17 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
               </Button>
             </div>
           )}
+          {isAdmin && canLeave && mine && (
+            <div className="mx-auto mt-2 flex max-w-lg items-center gap-2">
+              <span className="flex flex-1 items-center gap-1.5 text-sm font-bold">
+                {mine.seat ? <Armchair className="size-4 text-gold" /> : <Hourglass className="size-4 text-gold" />}
+                {mine.seat ? `אתה במקום ${mine.seat}` : "אתה ברשימת ההמתנה"}
+              </span>
+              <Button size="sm" variant="danger" loading={busy === "leave"} onClick={askLeave}>
+                <LogOut className="size-4" /> ביטול הכיסא שלי
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -352,6 +366,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
             isMine={sheetWho?.member_id === myId}
             isAdmin={isAdmin}
             open={open}
+            canLeave={canLeave}
             candidates={unseated}
             busy={!!busy}
             onLeave={async () => (await leave()) && setSeatSheet(null)}
@@ -395,6 +410,7 @@ function SeatSheet(p: {
   isMine: boolean;
   isAdmin: boolean;
   open: boolean;
+  canLeave: boolean;
   candidates: Member[];
   busy: boolean;
   canTakeMyself: boolean;
@@ -416,9 +432,9 @@ function SeatSheet(p: {
             {!p.who.user_id && <div className="text-xs text-warn">עוד לא נרשם לאפליקציה</div>}
           </div>
         </div>
-        {p.isMine && p.open && (
+        {p.isMine && p.canLeave && (
           <Button variant="danger" className="w-full" disabled={p.busy} onClick={p.onLeave}>
-            <LogOut className="size-4" /> יציאה מההרשמה
+            <LogOut className="size-4" /> ביטול הכיסא שלי
           </Button>
         )}
         {p.isAdmin && !p.isMine && (

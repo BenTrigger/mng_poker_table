@@ -240,7 +240,7 @@ export function PlayersTab({ ctx }: { ctx: Ctx }) {
                 <Button size="sm" onClick={() => setStatus(m, { status: "active" })}>
                   <Check className="size-4" /> אישור
                 </Button>
-                <Button size="sm" variant="danger" onClick={() => supabase().from("table_members").delete().eq("id", m.id).then(() => ctx.reload())}>
+                <Button size="sm" variant="danger" aria-label="דחייה" onClick={() => supabase().from("table_members").delete().eq("id", m.id).then(() => ctx.reload())}>
                   <X className="size-4" />
                 </Button>
               </Card>

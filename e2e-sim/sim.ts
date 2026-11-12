@@ -57,14 +57,18 @@ export type Player = {
   ctx: BrowserContext;
   page: Page;
   errors: string[];
+  /** The same user straight against the API, to try what the UI does not offer. */
+  api: SupabaseClient;
 };
 
 const runId = Date.now().toString(36);
+// scenarios run in one process and reuse names, so every user gets their own number
+let userNo = 0;
 const PASSWORD = "sim-password-123";
 
 /** A signed-in user with their own phone (browser context). */
 export async function newPlayer(browser: Browser, baseURL: string, vision: Vision, name: string): Promise<Player> {
-  const email = `${encodeURIComponent(name).replace(/%/g, "").toLowerCase().slice(0, 20)}-${runId}@sim.test`;
+  const email = `${encodeURIComponent(name).replace(/%/g, "").toLowerCase().slice(0, 20)}-${runId}-${++userNo}@sim.test`;
   const { data, error } = await db().auth.admin.createUser({
     email,
     password: PASSWORD,
@@ -96,12 +100,16 @@ export async function newPlayer(browser: Browser, baseURL: string, vision: Visio
   });
   const page = await ctx.newPage();
   const errors: string[] = [];
+  page.on("dialog", (d) => d.accept()); // "are you sure?" confirms
   page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
   if (process.env.CI) page.on("console", (m) => console.log(`[${name}] ${m.type()}: ${m.text().slice(0, 300)}`));
   page.on("console", (m) => {
-    if (m.type() === "error" && !/Failed to load resource|websocket|ERR_ABORTED/i.test(m.text())) errors.push(`${name}: ${m.text()}`);
+    if (m.type() === "error" && !/Failed to load resource|websocket|ERR_ABORTED|navigator.vibrate/i.test(m.text())) errors.push(`${name}: ${m.text()}`);
   });
-  return { name, email, userId: data.user.id, ctx, page, errors };
+  const api = createClient(SB_URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { error: apiError } = await api.auth.signInWithPassword({ email, password: PASSWORD });
+  if (apiError) throw apiError;
+  return { name, email, userId: data.user.id, ctx, page, errors, api };
 }
 
 let photo: Buffer | null = null;
