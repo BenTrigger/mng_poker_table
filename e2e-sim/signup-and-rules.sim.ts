@@ -198,7 +198,7 @@ test("invites, early sign-up with seats, table rules and permissions", async ({ 
     await btn(alon.page, "פתיחת הערב עם הרשומים (3)").click();
     await alon.page.waitForURL(/new-night\?signup=/);
     await expect(alon.page.getByText("השחקנים והמקומות נטענו מההרשמה המוקדמת (3 רשומים)")).toBeVisible();
-    await btn(alon.page, "הגדרת ערכת צ'יפים").click();
+    await btn(alon.page, "עריכת הערכה").click();
     await btn(sheet(alon.page), "שמירת ערכה").click();
     const row = alon.page.locator("div.rounded-2xl", { hasText: "גל" }).filter({ has: alon.page.getByRole("button", { name: "קופאי" }) });
     await row.getByRole("button", { name: "קופאי" }).click();
@@ -219,6 +219,8 @@ test("invites, early sign-up with seats, table rules and permissions", async ({ 
   await test.step("a short night; a player cannot approve their own chips or appoint themself cashier", async () => {
     const nightId = nightUrl.split("/").pop()!;
     for (const pl of [hadar, dor, gal]) await pl.page.goto(nightUrl);
+    // Gal is the cashier (there by definition); Dor and Hadar confirm they arrived
+    for (const pl of [dor, hadar]) await btn(pl.page, "הגעתי").first().click();
     await btn(dor.page, "בקשת צ'יפים").click();
     await btn(sheet(dor.page), "שליחה לקופאי").click();
 

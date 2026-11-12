@@ -1,7 +1,7 @@
 "use client";
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Landmark, Plus, UserPlus } from "lucide-react";
+import { Check, Landmark, Pencil, Plus, UserPlus } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { addGuest as addGuestByName } from "@/lib/guests";
 import { useAuth, useTable, logEvent } from "@/lib/hooks";
@@ -9,7 +9,8 @@ import { TopBar } from "@/components/top-bar";
 import { Avatar, Button, Card, ChipDot, Field, Sheet, Spinner, inputCls } from "@/components/ui";
 import { ChipSetEditor } from "@/components/chip-set-editor";
 import { formatMoney } from "@/lib/calc";
-import type { Chip } from "@/lib/types";
+import type { Chip, ChipSet } from "@/lib/types";
+import { DEFAULT_CHIPS } from "@/lib/chips";
 
 const MAX_PLAYERS = 10;
 
@@ -24,7 +25,7 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
   const [moneyPer, setMoneyPer] = useState(100);
   const [selected, setSelected] = useState<string[]>([]);
   const [cashier, setCashier] = useState<string>("");
-  const [setOpen, setSetOpen] = useState(false);
+  const [editing, setEditing] = useState<ChipSet | "new" | null>(null);
   const [guest, setGuest] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -79,10 +80,18 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
   const toggle = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : s.length >= MAX_PLAYERS ? s : [...s, id]));
 
   async function saveSet(name: string, chips: Chip[]) {
-    const { data } = await supabase().from("chip_sets").insert({ table_id: t.table!.id, name, chips }).select().single();
-    await t.reload();
-    if (data) setChipSetId(data.id);
-    setSetOpen(false);
+    if (editing && editing !== "new") {
+      const { error } = await supabase().from("chip_sets").update({ name, chips }).eq("id", editing.id);
+      if (error) throw error;
+      await t.reload();
+      setChipSetId(editing.id);
+    } else {
+      const { data, error } = await supabase().from("chip_sets").insert({ table_id: t.table!.id, name, chips }).select().single();
+      if (error) throw error;
+      await t.reload();
+      if (data) setChipSetId(data.id);
+    }
+    setEditing(null);
   }
 
   async function addGuest() {
@@ -100,11 +109,21 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
     setBusy(true);
     setErr(null);
     const sb = supabase();
+    // no set yet: the starter set shown on screen becomes the table's set
+    let setId = chipSetId;
+    if (!setId) {
+      const { data: created, error: createErr } = await sb.from("chip_sets").insert({ table_id: t.table!.id, name: "הערכה שלנו", chips: DEFAULT_CHIPS }).select().single();
+      if (setErr || !created) {
+        setBusy(false);
+        return setErr(createErr?.message ?? "שגיאה ביצירת ערכה");
+      }
+      setId = created.id;
+    }
     const { data: night, error } = await sb
       .from("game_nights")
       .insert({
         table_id: t.table!.id,
-        chip_set_id: chipSetId,
+        chip_set_id: setId,
         chips_per_buyin: chipsPer,
         money_per_buyin: moneyPer,
         cashier_member_id: cashier || null,
@@ -116,17 +135,20 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
       setBusy(false);
       return setErr(error?.message ?? "שגיאה");
     }
-    await sb.from("night_players").insert(selected.map((member_id, seat) => ({ night_id: night.id, member_id, seat })));
+    // the others confirm their arrival at the table; the cashier and whoever opens the night are there
+    const now = new Date().toISOString();
+    const here = new Set([cashier, t.me?.id]);
+    await sb.from("night_players").insert(selected.map((member_id, seat) => ({ night_id: night.id, member_id, seat, arrived_at: here.has(member_id) ? now : null })));
     await sb
       .from("poker_tables")
-      .update({ last_settings: { ...(t.table!.last_settings ?? {}), chip_set_id: chipSetId, chips_per_buyin: chipsPer, money_per_buyin: moneyPer, cashier_member_id: cashier, member_ids: selected } })
+      .update({ last_settings: { ...(t.table!.last_settings ?? {}), chip_set_id: setId, chips_per_buyin: chipsPer, money_per_buyin: moneyPer, cashier_member_id: cashier, member_ids: selected } })
       .eq("id", t.table!.id);
     if (signupId) await sb.from("signups").update({ status: "started", night_id: night.id }).eq("id", signupId);
     await logEvent(night.id, "night_opened", { players: selected.length, chips_per_buyin: chipsPer, money_per_buyin: moneyPer, cashier });
     router.replace(`/t/${code}/n/${night.id}`);
   }
 
-  const valid = chipSetId && chipsPer > 0 && moneyPer > 0 && selected.length >= 2 && cashier && selected.includes(cashier);
+  const valid = (chipSetId || t.chipSets.length === 0) && chipsPer > 0 && moneyPer > 0 && selected.length >= 2 && cashier && selected.includes(cashier);
 
   return (
     <>
@@ -140,6 +162,24 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
         <section>
           <h2 className="mb-2 px-1 text-sm font-bold text-muted">ערכת צ'יפים</h2>
           <div className="space-y-2">
+            {t.chipSets.length === 0 && (
+              <Card className="flex items-center gap-3 border-gold/60 bg-gold/5">
+                <div className="min-w-0 flex-1">
+                  <div className="font-bold">ערכה התחלתית</div>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    {DEFAULT_CHIPS.map((c) => (
+                      <span key={c.color} className="num inline-flex items-center gap-1 text-xs text-muted">
+                        <ChipDot hex={c.hex} size={14} /> {c.value}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="mt-1.5 text-xs text-muted">ככה הערכה תישמר אם לא תשנה. אפשר לערוך צבעים וערכים או ללמד אותה מתמונות.</p>
+                </div>
+                <Button size="sm" variant="soft" onClick={() => setEditing("new")}>
+                  <Pencil className="size-4" /> עריכת הערכה
+                </Button>
+              </Card>
+            )}
             {t.chipSets.map((s) => (
               <Card key={s.id} onClick={() => setChipSetId(s.id)} className={`flex cursor-pointer items-center gap-3 ${chipSetId === s.id ? "border-gold/60 bg-gold/5" : ""}`}>
                 <div className="min-w-0 flex-1">
@@ -153,11 +193,23 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
                   </div>
                 </div>
                 {chipSetId === s.id && <Check className="size-5 text-gold" />}
+                <button
+                  className="grid size-9 place-items-center rounded-xl bg-surface-2 text-muted"
+                  aria-label={`עריכת ${s.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditing(s);
+                  }}
+                >
+                  <Pencil className="size-4" />
+                </button>
               </Card>
             ))}
-            <Button variant="ghost" size="sm" onClick={() => setSetOpen(true)}>
-              <Plus className="size-4" /> {t.chipSets.length ? "החלפנו ערכה? הגדר חדשה" : "הגדרת ערכת צ'יפים"}
-            </Button>
+            {t.chipSets.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => setEditing("new")}>
+                <Plus className="size-4" /> החלפנו ערכה? הגדר חדשה
+              </Button>
+            )}
           </div>
         </section>
 
@@ -225,8 +277,17 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
         </div>
       </div>
 
-      <Sheet open={setOpen} onClose={() => setSetOpen(false)} title="ערכת צ'יפים חדשה">
-        {t.table && <ChipSetEditor tableId={t.table.id} onSave={saveSet} />}
+      <Sheet open={!!editing} onClose={() => setEditing(null)} title={editing && editing !== "new" ? "עריכת ערכה" : "ערכת צ'יפים"}>
+        {t.table && editing && (
+          <ChipSetEditor
+            key={editing === "new" ? "new" : editing.id}
+            tableId={t.table.id}
+            chipSetId={editing === "new" ? undefined : editing.id}
+            initial={editing === "new" ? undefined : editing.chips}
+            initialName={editing === "new" ? undefined : editing.name}
+            onSave={saveSet}
+          />
+        )}
       </Sheet>
     </>
   );

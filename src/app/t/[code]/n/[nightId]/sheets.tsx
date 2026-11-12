@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, Check, X, AlertTriangle, Pencil, Share2, Landmark, UserPlus, LogOut, ImageIcon, Sparkles, Trash2, ArrowLeftRight } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
+import { verdictOf } from "@/lib/verdict";
 import { addGuest as addGuestByName } from "@/lib/guests";
 import { logEvent } from "@/lib/hooks";
 import { balanceNets, chipCheck, chipRate, chipSetTotal, chipsToMoney, formatMoney, formatSigned, moneyToChips, round2, settle, settleViaHub, type PlayerLine, type SettleMode } from "@/lib/calc";
@@ -178,9 +179,11 @@ function Breakdown({ total, chipSet }: { total: number; chipSet: ChipSet }) {
 // Chip counter: photo -> AI count (if configured) with manual override
 // ---------------------------------------------------------------------------
 export function ChipCounter({
-  chipSet, expected, onDone, cta, busy, hint = "צלם את הערימה מהצד",
+  chipSet, expected, onDone, cta, busy, hint = "צלם את הערימה מהצד", verdict = false,
 }: {
   chipSet: ChipSet | null; expected?: number; cta: string; busy?: boolean; hint?: string;
+  /** hand-over to a player: say right away whether the photo matches what they asked for */
+  verdict?: boolean;
   onDone: (r: { total: number; photo: Blob | null; detected: number | null; count: ChipCount | null; manual: boolean }) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -304,6 +307,7 @@ export function ChipCounter({
           />
         </Card>
       )}
+      {verdict && count && expected != null && total > 0 && <Verdict expected={expected} total={total} low={count.confidence === "low"} />}
       {err && <p className="text-xs text-warn">{err}</p>}
 
       <Field label="סה״כ צ'יפים" hint={edited ? "שינית את הספירה. התיקון יתועד ביומן הערב." : undefined}>
@@ -319,6 +323,19 @@ export function ChipCounter({
       >
         {cta}
       </Button>
+    </div>
+  );
+}
+
+function Verdict({ expected, total, low }: { expected: number; total: number; low: boolean }) {
+  const v = verdictOf(expected, total, low);
+  return (
+    <div role="status" className={`flex items-start gap-2 rounded-2xl border p-3 ${v.tone === "win" ? "border-win/40 bg-win/10" : "border-warn/40 bg-warn/10"}`}>
+      {v.tone === "win" ? <Check className="size-5 shrink-0 text-win" /> : <AlertTriangle className="size-5 shrink-0 text-warn" />}
+      <div>
+        <div className={`font-bold ${v.tone === "win" ? "text-win" : "text-warn"}`}>{v.title}</div>
+        <div className="text-xs text-muted">{v.text}</div>
+      </div>
     </div>
   );
 }
@@ -431,7 +448,7 @@ export function CashierSheet({
                 </div>
               )}
             </Card>
-            <ChipCounter chipSet={chipSet} expected={requested} cta="מסרתי, אישור" busy={busy} onDone={onCounted} />
+            <ChipCounter chipSet={chipSet} expected={requested} cta="מסרתי, אישור" busy={busy} onDone={onCounted} verdict hint="צלם מהצד את הצ'יפים שאתה מוסר" />
             {err && <p className="text-sm text-loss">{err}</p>}
           </div>
         ) : (
@@ -675,7 +692,7 @@ export function AdminSheet({
       await logEvent(night.id, "cashier_changed", { member_id: id });
     });
   async function seat(memberId: string) {
-    const { error } = await supabase().from("night_players").insert({ night_id: night.id, member_id: memberId, seat: nextSeat() });
+    const { error } = await supabase().from("night_players").insert({ night_id: night.id, member_id: memberId, seat: nextSeat(), arrived_at: new Date().toISOString() });
     if (error) throw error;
     await logEvent(night.id, "player_added", { member_id: memberId });
   }
@@ -802,7 +819,10 @@ export function CloseSheet({
   const rate = chipRate(night);
   const cashierId = night.cashier_member_id;
   const [mode, setMode] = useState<SettleMode>(table.last_settings?.settle_mode === "cashier" && cashierId ? "cashier" : "players");
-  const playing = players.filter((p) => p.status === "playing");
+  // expected but never came and got nothing: not counted, taken off the night when it closes
+  const noShow = (p: NightPlayer) => p.status === "playing" && !p.arrived_at && !(lines.find((l) => l.member_id === p.member_id)?.boughtChips || lines.find((l) => l.member_id === p.member_id)?.pendingChips);
+  const noShows = players.filter(noShow);
+  const playing = players.filter((p) => p.status === "playing" && !noShow(p));
   const [counts, setCounts] = useState<Record<string, { total: number; photo: Blob | null }>>({});
   const [counting, setCounting] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -850,6 +870,10 @@ export function CloseSheet({
       if (r.error) throw r.error;
       return r;
     };
+    if (noShows.length) {
+      ok(await sb.from("night_players").delete().in("id", noShows.map((p) => p.id)));
+      await logEvent(night.id, "no_shows_removed", { member_ids: noShows.map((p) => p.member_id) });
+    }
     for (const p of playing) {
       const c = counts[p.member_id];
       const l = lines.find((x) => x.member_id === p.member_id)!;
@@ -904,6 +928,9 @@ export function CloseSheet({
           </div>
         )}
         <p className="text-sm text-muted">ספרו את הצ'יפים של כל מי שעדיין משחק. אפשר לצלם וזה ייספר לפי צבעים.</p>
+        {noShows.length > 0 && (
+          <p className="text-xs text-muted">לא הגיעו ולא קנו: {noShows.map((p) => nameOf(members, p.member_id)).join(", ")}. הם יורדו מהערב בסגירה.</p>
+        )}
         <div className="space-y-2">
           {playing.map((p) => {
             const c = counts[p.member_id];

@@ -653,7 +653,14 @@ export function SettingsTab({ ctx }: { ctx: Ctx }) {
           </Button>
         </div>
         {ctx.chipSets.length === 0 ? (
-          <Card className="text-center text-sm text-muted">עוד לא הוגדרה ערכה. תוגדר בפתיחת הערב הראשון.</Card>
+          <Card className="space-y-3 text-center text-sm text-muted">
+            <p>עוד לא הוגדרה ערכה. אפשר להתחיל מערכה התחלתית ולערוך אותה עכשיו.</p>
+            {ctx.isAdmin && (
+              <Button size="sm" variant="soft" onClick={() => setEditing("new")}>
+                <Pencil className="size-4" /> עריכת ערכה התחלתית
+              </Button>
+            )}
+          </Card>
         ) : (
           <div className="space-y-2">
             {ctx.chipSets.map((s) => (

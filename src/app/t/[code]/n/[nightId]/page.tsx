@@ -1,6 +1,7 @@
 "use client";
 import { use, useEffect, useMemo, useRef, useState } from "react";
-import { Landmark, HandCoins, Flag, ListChecks, Users, AlertTriangle, Activity } from "lucide-react";
+import { Landmark, HandCoins, Flag, ListChecks, Users, AlertTriangle, Activity, Hand, Check } from "lucide-react";
+import { supabase } from "@/lib/supabase/client";
 import { useAuth, useNight, useTable } from "@/lib/hooks";
 import { chipRate, formatMoney, formatSigned, playerLines } from "@/lib/calc";
 import { TopBar } from "@/components/top-bar";
@@ -27,6 +28,35 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
   const pending = n.requests.filter((r) => r.status === "pending");
   const flagged = n.requests.filter((r) => r.status === "flagged");
   const myLine = lines.find((l) => l.member_id === me?.id);
+  const open = night?.status === "open";
+  const waitingFor = n.players.filter((p) => p.status === "playing" && !p.arrived_at);
+  const myPlayer = n.players.find((p) => p.member_id === me?.id);
+  const iAmExpected = open && myPlayer?.status === "playing" && !myPlayer.arrived_at;
+  const [arriving, setArriving] = useState<string | null>(null);
+
+  // a later toast is not cut short by an earlier one's timer
+  function flash(text: string) {
+    setToast(text);
+    setTimeout(() => setToast((t) => (t === text ? null : t)), 2500);
+  }
+
+  async function markArrived(playerId: string) {
+    setArriving(playerId);
+    const { error } = await supabase().rpc("set_arrived", { p_player: playerId, p_arrived: true });
+    setArriving(null);
+    if (error) {
+      flash("לא הצלחתי לסמן הגעה, נסה שוב");
+    } else n.reload();
+  }
+
+  // tell the admin and the cashier when someone arrives
+  const prevWaiting = useRef<number | null>(null);
+  useEffect(() => {
+    if (prevWaiting.current != null && waitingFor.length < prevWaiting.current && canManage && open) {
+      flash("שחקן אישר הגעה");
+    }
+    prevWaiting.current = waitingFor.length;
+  }, [waitingFor.length, canManage, open]);
 
   // buzz the cashier when a new request arrives
   const prevPending = useRef<number | null>(null);
@@ -55,17 +85,18 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
     const m = t.members.find((x) => x.id === p.member_id);
     const net = closed ? Number(p.net ?? l.net ?? 0) : l.net;
     const showNet = (closed || p.status === "out") && (seeAll || p.member_id === me.id);
+    const away = !closed && p.status === "playing" && !p.arrived_at;
     return {
       id: p.member_id,
       name: m?.display_name ?? "שחקן",
       avatar: m?.avatar_url,
       amount: showNet ? formatSigned(net) : formatMoney(l.boughtMoney),
-      sub: showNet ? (closed ? undefined : "יצא") : l.buyins ? `${+l.buyins.toFixed(1)} כניסות` : "טרם קנה",
+      sub: showNet ? (closed ? undefined : "יצא") : away ? "טרם הגיע" : l.buyins ? `${+l.buyins.toFixed(1)} כניסות` : "טרם קנה",
       tone: showNet ? ((net ?? 0) >= 0 ? "win" : "loss") : l.boughtMoney ? "gold" : "muted",
       isCashier: p.member_id === night.cashier_member_id,
       isMe: p.member_id === me.id,
       pending: l.pendingChips > 0,
-      out: p.status === "out" && !closed,
+      out: (p.status === "out" && !closed) || away,
     };
   });
 
@@ -119,7 +150,44 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
               </button>
             )}
 
-            {myLine && myLine.status === "playing" && (
+            {iAmExpected && myPlayer && (
+              <Card className="mb-3 space-y-3 border-gold/50 bg-gold/5 text-center">
+                <div>
+                  <div className="font-bold">הגעת לשולחן?</div>
+                  <div className="text-xs text-muted">אשר הגעה, ואז אפשר לבקש צ&apos;יפים מהקופאי.</div>
+                </div>
+                <Button size="lg" className="w-full" loading={arriving === myPlayer.id} onClick={() => markArrived(myPlayer.id)}>
+                  <Hand className="size-5" /> הגעתי
+                </Button>
+              </Card>
+            )}
+
+            {canManage && waitingFor.length > 0 && (
+              <Card className="mb-3 p-0">
+                <div className="px-4 pb-1 pt-4">
+                  <h2 className="font-bold">
+                    מי עוד לא הגיע ({waitingFor.length} מתוך {n.players.filter((p) => p.status === "playing").length})
+                  </h2>
+                  <p className="text-xs text-muted">שחקן מאשר בטלפון שלו, או שאתה מסמן כאן כשהוא מגיע.</p>
+                </div>
+                <div className="divide-y divide-line">
+                  {waitingFor.map((p) => {
+                    const m = t.members.find((x) => x.id === p.member_id);
+                    return (
+                      <div key={p.id} className="flex items-center gap-3 px-4 py-2.5">
+                        <Avatar name={m?.display_name ?? ""} src={m?.avatar_url} size={34} />
+                        <span className="min-w-0 flex-1 truncate text-sm font-bold">{m?.display_name ?? "שחקן"}</span>
+                        <Button size="sm" variant="soft" loading={arriving === p.id} disabled={!!arriving} onClick={() => markArrived(p.id)} aria-label={`${m?.display_name ?? ""} הגיע`}>
+                          <Check className="size-4" /> הגיע
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+
+            {myLine && myLine.status === "playing" && !iAmExpected && (
               <Card className="mb-3 flex items-center gap-3">
                 <div className="flex-1">
                   <div className="text-xs text-muted">אני בערב הזה</div>
@@ -173,7 +241,11 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
       {!closed && (
         <div className="glass fixed inset-x-0 bottom-0 z-30 border-t border-line p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto flex max-w-lg gap-2">
-            {(myLine?.status === "playing" || canManage) && (
+            {iAmExpected && !canManage && myPlayer ? (
+              <Button size="lg" className="flex-1" loading={arriving === myPlayer.id} onClick={() => markArrived(myPlayer.id)}>
+                <Hand className="size-5" /> הגעתי
+              </Button>
+            ) : (myLine?.status === "playing" || canManage) && (
               <Button size="lg" className="flex-1" onClick={() => setSheet("request")}>
                 <HandCoins className="size-5" /> בקשת צ'יפים
               </Button>
