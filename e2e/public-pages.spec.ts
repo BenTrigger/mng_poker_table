@@ -125,4 +125,10 @@ test("service worker handles push and notification taps", async ({ request }) =>
   const src = await sw.text();
   expect(src).toContain('addEventListener("push"');
   expect(src).toContain('addEventListener("notificationclick"');
+  // Android draws the badge in the status bar: it must be a transparent monochrome PNG
+  const badge = src.match(/badge: "([^"]+)"/)?.[1];
+  expect(badge).toBe("/icons/badge-96.png");
+  const png = await request.get(badge!);
+  expect(png.ok()).toBeTruthy();
+  expect(png.headers()["content-type"]).toContain("image/png");
 });
