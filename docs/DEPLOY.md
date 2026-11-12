@@ -1,50 +1,49 @@
-# העלאה ל-Cloudflare · pokertable.realizeaisolution.com
+# העלאה אוטומטית · pokertable.realizeaisolution.com
 
-האפליקציה רצה כ-Cloudflare Worker (Next.js דרך OpenNext). Cloudflare בונה ומעלה אוטומטית בכל מיזוג ל-`main`, כך שכל עדכון מגיע למשתמשים לבד.
+כל push ל-`main` מריץ את `.github/workflows/deploy.yml`, שעושה הכל לבד:
+מיגרציות למסד הנתונים ב-Supabase, הגדרות התחברות (כולל Google), בנייה, והעלאה ל-Cloudflare Workers בדומיין.
+אין שום פעולה ידנית בגרסאות. מגדירים את הסודות פעם אחת ושוכחים.
 
-## פעם אחת: Supabase
+## הגדרה חד-פעמית
 
-1. צור פרויקט ב-[supabase.com](https://supabase.com) (אזור: Frankfurt, הכי קרוב לישראל).
-2. SQL Editor → הדבק והרץ את `supabase/migrations/0001_init.sql`.
-3. Authentication → URL Configuration:
-   - Site URL: `https://pokertable.realizeaisolution.com`
-   - Redirect URLs: `https://pokertable.realizeaisolution.com/**` ו-`http://localhost:3000/**`
-4. Authentication → Providers → Google: הדבק Client ID ו-Secret (שלב הבא).
-5. Project Settings → API: העתק את `Project URL` ואת `anon public key`.
+### 1. Cloudflare (טוקן)
+[dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) → Create Token → **Edit Cloudflare Workers** (תבנית) →
+ב-Zone Resources לבחור `realizeaisolution.com`, ולהוסיף הרשאה `Zone · DNS · Edit` → Create.
+- `CLOUDFLARE_API_TOKEN` = הטוקן
+- `CLOUDFLARE_ACCOUNT_ID` = Account ID (מופיע בצד ימין בדף הבית של הדומיין)
 
-## פעם אחת: Google OAuth
+### 2. Supabase
+צור פרויקט ב-[supabase.com](https://supabase.com/dashboard) (Region: Frankfurt), ושמור את סיסמת מסד הנתונים.
+- `SUPABASE_PROJECT_REF` = המזהה מכתובת הפרויקט (`https://supabase.com/dashboard/project/<REF>`)
+- `SUPABASE_DB_PASSWORD` = סיסמת מסד הנתונים
+- `SUPABASE_ACCESS_TOKEN` = טוקן אישי מ-[Account → Access Tokens](https://supabase.com/dashboard/account/tokens)
 
-1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → Create credentials → OAuth client ID → Web application.
-2. Authorized JavaScript origins: `https://pokertable.realizeaisolution.com`
-3. Authorized redirect URIs: `https://<project-ref>.supabase.co/auth/v1/callback`
-4. OAuth consent screen: שם האפליקציה "All In", ולפרסם (Publish) כדי שכל משתמש גוגל יוכל להיכנס.
+### 3. Google
+[console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials) → Create credentials → OAuth client ID → Web application:
+- Authorized JavaScript origins: `https://pokertable.realizeaisolution.com`
+- Authorized redirect URIs: `https://<REF>.supabase.co/auth/v1/callback`
 
-## פעם אחת: Cloudflare
+ב-OAuth consent screen: App name "All In", ואז **Publish app**.
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 
-הדומיין `realizeaisolution.com` צריך להיות באותו חשבון Cloudflare.
+### 4. אופציונלי
+- `ANTHROPIC_API_KEY`: ספירת צ'יפים מתמונה ([console.anthropic.com](https://console.anthropic.com))
 
-1. Workers & Pages → Create → **Import a repository** → בחר את `BenTrigger/mng_poker_table`.
-2. הגדרות בנייה:
-   - Build command: `npx opennextjs-cloudflare build`
-   - Deploy command: `npx opennextjs-cloudflare deploy`
-   - Production branch: `main`
-3. Settings → Variables and secrets. להוסיף גם ב-**Build variables** וגם ב-**Variables** (runtime):
-   | שם | ערך |
-   |---|---|
-   | `NEXT_PUBLIC_SUPABASE_URL` | ה-Project URL מ-Supabase |
-   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ה-anon key |
-   | `ANTHROPIC_API_KEY` (Secret, runtime בלבד) | אופציונלי, לספירת צ'יפים מתמונה |
-   | `NEXT_PUBLIC_APK_URL` (Build) | אופציונלי, קישור ל-APK |
-4. Deploy. הדומיין `pokertable.realizeaisolution.com` מוגדר ב-`wrangler.jsonc` ו-Cloudflare יוצר לו DNS ותעודה לבד.
+### איפה שמים
+GitHub → הריפו → Settings → Secrets and variables → Actions → **New repository secret**, לכל אחד מהשמות למעלה.
+אחר כך: Actions → Deploy → Run workflow (או כל push ל-`main`).
 
-## בדיקה אחרי העלאה
+## מה הזרימה עושה
 
-- `https://pokertable.realizeaisolution.com/api/version` מחזיר את הגרסה.
-- כניסה עם גוגל, יצירת שולחן, פתיחת ערב.
+1. lint + בדיקות. אם משהו נכשל, לא עולה כלום.
+2. `supabase db push`: מריץ מיגרציות חדשות מ-`supabase/migrations`.
+3. מגדיר ב-Supabase: Site URL, כתובות חזרה, והתחברות Google.
+4. בונה (OpenNext) ומעלה ל-Cloudflare. הדומיין מוגדר ב-`wrangler.jsonc` ו-Cloudflare יוצר DNS ותעודה לבד.
+5. בודק ש-`/api/version` עונה.
 
-## מקומית מול Cloudflare
+## הרצה מקומית מול Cloudflare
 
 ```bash
 cp .env.example .env.local   # ולמלא
-npm run preview              # בונה ומריץ את ה-Worker מקומית
+npm run preview
 ```

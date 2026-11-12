@@ -30,7 +30,7 @@
 
 ## הקמה (פעם אחת)
 
-1. **Supabase:** צור פרויקט ב-[supabase.com](https://supabase.com). ב-SQL Editor הרץ את `supabase/migrations/0001_init.sql`.
+1. **Supabase:** צור פרויקט ב-[supabase.com](https://supabase.com). המיגרציות ב-`supabase/migrations` רצות אוטומטית בהעלאה.
 2. **Google login:** ב-Google Cloud Console צור OAuth Client (Web). ב-Authorized redirect URIs הוסף `https://YOUR-PROJECT.supabase.co/auth/v1/callback`. ב-Supabase: Authentication → Providers → Google, הדבק Client ID ו-Secret. ב-Authentication → URL Configuration הוסף את כתובת האתר שלך (ו-`http://localhost:3000` לפיתוח) ל-Redirect URLs.
 3. **משתני סביבה:** העתק `.env.example` ל-`.env.local` ומלא. `ANTHROPIC_API_KEY` אופציונלי: בלעדיו הכל עובד וספירת הצ'יפים ידנית.
 4. **הרצה מקומית:** `npm install` ואז `npm run dev`.
@@ -56,7 +56,7 @@ npx @bubblewrap/cli build
 ## מבנה
 
 ```
-supabase/migrations/0001_init.sql   סכמה, הרשאות (RLS), RPC, realtime, storage
+supabase/migrations/                סכמה, הרשאות (RLS), RPC, realtime, storage
 src/lib/calc.ts                     חישובי חוב, איזון, מי-חייב-למי, סטטיסטיקות
 src/lib/hooks.ts                    טעינת נתונים + עדכונים בזמן אמת
 src/app/api/count-chips/route.ts    ספירת צ'יפים מתמונה (Claude)
