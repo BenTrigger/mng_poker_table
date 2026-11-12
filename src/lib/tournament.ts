@@ -3,6 +3,7 @@
  * Pure functions only (no Supabase), so they are easy to test.
  */
 import { round2 } from "./calc";
+import { wazeUrl } from "./signup";
 import type { Tournament, TournamentEntry, TournamentLevel } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -16,6 +17,7 @@ export type TournamentForm = {
   name: string;
   startsAt: string;
   location: string;
+  address: string;
   note: string;
   tables: number;
   seats: number;
@@ -319,7 +321,8 @@ const dateLine = (s: string) =>
 export function tournamentInviteText(t: Tournament, tableName: string, names: string[], waiting: number, link: string) {
   const cap = t.table_count * t.seats_per_table;
   const lines = [`🏆 ${t.name} - ${tableName}`, `📅 ${dateLine(t.starts_at)}`];
-  if (t.location) lines.push(`📍 ${t.location}`);
+  if (t.location) lines.push(`🏠 מארח: ${t.location}`);
+  if (t.address) lines.push(`📍 ${t.address}`, `🚗 ניווט בוויז: ${wazeUrl(t.address)}`);
   lines.push(`💰 כניסה ₪${Number(t.buy_in).toLocaleString()} · ${Number(t.starting_stack).toLocaleString()} צ'יפים`);
   if (t.rebuy_until_level > 0) lines.push(`🔁 ריביי עד סוף שלב ${t.rebuy_until_level}`);
   if (t.note) lines.push(`📝 ${t.note}`);

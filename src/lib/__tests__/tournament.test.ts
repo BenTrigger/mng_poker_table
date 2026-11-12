@@ -7,7 +7,7 @@ import type { Tournament, TournamentEntry } from "../types";
 
 const levels = blindStructure(10000, 20);
 const T: Tournament = {
-  id: "t1", table_id: "tb", name: "טורניר חמישי", starts_at: "2026-11-20T18:00:00.000Z", location: null, note: null,
+  id: "t1", table_id: "tb", name: "טורניר חמישי", starts_at: "2026-11-20T18:00:00.000Z", location: null, address: null, note: null,
   table_count: 2, seats_per_table: 9, buy_in: 100, starting_stack: 10000, rebuy_until_level: 4, rebuy_price: null, rebuy_chips: null,
   addon_price: 50, addon_chips: 5000, late_reg_until_level: 4, levels, registration_open: true, status: "running",
   clock_anchor: "2026-11-20T18:00:00.000Z", paused_at: null, started_at: null, finished_at: null, created_by: null, created_at: "",
