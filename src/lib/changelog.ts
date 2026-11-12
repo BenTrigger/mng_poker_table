@@ -6,7 +6,7 @@ export type Release = { version: string; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
-    version: "1.6.0",
+    version: "1.7.0",
     date: "2026-11-12",
     title: "מארח, כתובת וניווט בוויז 🚗",
     items: [
