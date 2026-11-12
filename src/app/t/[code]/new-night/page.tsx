@@ -215,7 +215,7 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
       </div>
 
       <Sheet open={setOpen} onClose={() => setSetOpen(false)} title="ערכת צ'יפים חדשה">
-        <ChipSetEditor onSave={saveSet} />
+        {t.table && <ChipSetEditor tableId={t.table.id} onSave={saveSet} />}
       </Sheet>
     </>
   );

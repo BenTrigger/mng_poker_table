@@ -188,7 +188,7 @@ export function ChipCounter({
     if (aiOn && chipSet) {
       setCounting(true);
       try {
-        const c = await countChipsFromPhoto(blob, chipSet.chips, expected);
+        const c = await countChipsFromPhoto(blob, chipSet, expected);
         setCount(c);
         setManual(String(c.total));
       } catch (e) {
@@ -217,7 +217,7 @@ export function ChipCounter({
         <button onClick={() => fileRef.current?.click()} className="flex h-32 w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gold/40 bg-gold/5 text-gold">
           <Camera className="size-8" />
           <span className="text-sm font-bold">{hint}</span>
-          {aiOn && <span className="flex items-center gap-1 text-[11px] text-muted"><Sparkles className="size-3" /> אספור לפי צבעים</span>}
+          {aiOn && <span className="flex items-center gap-1 text-[11px] text-muted"><Sparkles className="size-3" /> {chipSet?.chips.some((c) => c.images?.length) ? "אספור לפי תמונות הצ'יפים של הערכה" : "אספור לפי צבעים"}</span>}
         </button>
       )}
 

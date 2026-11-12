@@ -1,4 +1,24 @@
-export type Chip = { color: string; hex: string; value: number };
+export type Chip = {
+  color: string;
+  hex: string;
+  value: number;
+  /** reference photos of this chip (storage paths in the "chip-refs" bucket, <table_id>/<file>.jpg) */
+  images?: string[];
+  /** what the chip looks like (face and edge), learned from photos; helps counting */
+  desc?: string;
+};
+
+/** A chip type detected by /api/learn-chips. Boxes are pixel coordinates in the photo they refer to. */
+export type LearnedChipType = {
+  name: string;
+  hex: string;
+  /** the denomination printed on the chip, when it can be read */
+  value: number | null;
+  /** a likely value from common colour conventions, only a suggestion */
+  suggested: number | null;
+  desc: string;
+  crops: { photo: number; view: "top" | "side"; box: [number, number, number, number] }[];
+};
 
 export type Profile = {
   id: string;
