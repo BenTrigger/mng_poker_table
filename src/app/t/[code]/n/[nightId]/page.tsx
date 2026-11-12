@@ -1,6 +1,6 @@
 "use client";
 import { use, useEffect, useMemo, useRef, useState } from "react";
-import { Landmark, HandCoins, Flag, ListChecks, Users, AlertTriangle, Activity, Hand, Check } from "lucide-react";
+import { Landmark, HandCoins, ListChecks, Users, AlertTriangle, Activity, Hand, Check } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth, useNight, useTable } from "@/lib/hooks";
 import { chipRate, formatMoney, formatSigned, playerLines } from "@/lib/calc";
@@ -246,12 +246,12 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
                 <Hand className="size-5" /> הגעתי
               </Button>
             ) : (myLine?.status === "playing" || canManage) && (
-              <Button size="lg" className="flex-1" onClick={() => setSheet("request")}>
+              <Button size="lg" className="min-w-0 flex-1 px-3!" onClick={() => setSheet("request")}>
                 <HandCoins className="size-5" /> בקשת צ'יפים
               </Button>
             )}
             {canManage && (
-              <Button size="lg" variant="soft" className="relative" onClick={() => setSheet("cashier")}>
+              <Button size="lg" variant="soft" className="relative shrink-0 px-4!" onClick={() => setSheet("cashier")}>
                 <ListChecks className="size-5" /> קופה
                 {pending.length + flagged.length > 0 && (
                   <span className="pulse-ring absolute -left-1 -top-1 grid size-6 place-items-center rounded-full bg-gold text-xs font-extrabold text-[#1d1405]">
@@ -261,8 +261,8 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
               </Button>
             )}
             {t.isAdmin && (
-              <Button size="lg" variant="soft" onClick={() => setSheet("close")} aria-label="סגירת ערב">
-                <Flag className="size-5" /> סיום ערב
+              <Button size="lg" variant="soft" className="w-14 shrink-0 border border-loss/50 bg-loss/15! px-0! text-2xl" onClick={() => setSheet("close")} aria-label="סגירת ערב" title="סיום ערב">
+                <span aria-hidden>🏁</span>
               </Button>
             )}
           </div>
