@@ -26,7 +26,7 @@ test("a two-table tournament from registration to payouts", async ({ browser, ba
       name: (e.table_members as { display_name: string }).display_name,
     }));
 
-  await test.step("the admin opens registration: 2 tables of 3, ₪100, rebuys to level 2, add-on", async () => {
+  await test.step("the admin opens registration: 2 tables of 3, ₪100, settle at the end, rebuys to level 2, add-on", async () => {
     const p = tal.page;
     await p.goto("/tables");
     await btn(p, "שולחן חדש").click();
@@ -41,7 +41,9 @@ test("a two-table tournament from registration to payouts", async ({ browser, ba
     await row("שולחנות").getByRole("button", { name: "יותר" }).click();
     for (let i = 0; i < 6; i++) await row("כיסאות בשולחן").getByRole("button", { name: "פחות" }).click();
     await expect(s.getByText("עד 6 שחקנים", { exact: false })).toBeVisible();
-    await s.getByRole("group", { name: /ריביי/ }).getByRole("button", { name: "עד שלב 2" }).click();
+    await s.getByRole("group", { name: /ריביי/ }).getByRole("button", { name: "עד שלב בליינדים" }).click();
+    await s.getByRole("button", { name: /^שלב 2 · / }).click();
+    await s.getByRole("group", { name: "תשלום" }).getByRole("button", { name: "התחשבנות בסוף" }).click();
     await s.getByRole("group", { name: "הרשמה מאוחרת" }).getByRole("button", { name: "בלי" }).click();
     await s.locator('input[type="checkbox"]').check();
     await btn(s, "פתיחת הרשמה לטורניר").click();

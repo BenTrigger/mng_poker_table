@@ -24,7 +24,10 @@ export type TournamentForm = {
   buyIn: number;
   stack: number;
   speed: Speed;
-  rebuyLevels: number; // 0 = no rebuys
+  rebuyBy: "none" | "level" | "time";
+  rebuyLevels: number;
+  rebuyTime: string; // "HH:MM" when rebuyBy is "time"
+  payment: "upfront" | "end";
   addon: boolean;
   lateReg: number;
 };
@@ -324,7 +327,9 @@ export function tournamentInviteText(t: Tournament, tableName: string, names: st
   if (t.location) lines.push(`🏠 מארח: ${t.location}`);
   if (t.address) lines.push(`📍 ${t.address}`, `🚗 ניווט בוויז: ${wazeUrl(t.address, at)}`);
   lines.push(`💰 כניסה ₪${Number(t.buy_in).toLocaleString()} · ${Number(t.starting_stack).toLocaleString()} צ'יפים`);
-  if (t.rebuy_until_level > 0) lines.push(`🔁 ריביי עד סוף שלב ${t.rebuy_until_level}`);
+  const rb = rebuyLabel(t);
+  if (rb) lines.push(`🔁 ${rb}`);
+  lines.push(t.payment_mode === "upfront" ? "💵 משלמים במזומן בכניסה" : "💵 מתחשבנים בסוף");
   if (t.note) lines.push(`📝 ${t.note}`);
   lines.push("");
   if (names.length) {
@@ -398,4 +403,46 @@ export function tournamentStats(
   return [...map.values()]
     .map(({ places, ...s }) => ({ ...s, avgPlace: Math.round((places / s.played) * 10) / 10 }))
     .sort((a, b) => b.wins - a.wins || b.net - a.net);
+}
+
+// ---------------------------------------------------------------------------
+// Rebuy period: until a blind level, or until a clock time
+// ---------------------------------------------------------------------------
+
+const hhmm = (iso: string) => new Date(iso).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+
+/** Are rebuys still allowed? */
+export function rebuyOpenAt(t: Pick<Tournament, "rebuy_until_level" | "rebuy_until_time">, levelNo: number, now: number) {
+  if (t.rebuy_until_time) return now < new Date(t.rebuy_until_time).getTime();
+  return t.rebuy_until_level > 0 && levelNo <= t.rebuy_until_level;
+}
+
+/** "ריביי עד 22:30" / "ריביי עד סוף שלב 4 (100/200)" / "" when there are no rebuys */
+export function rebuyLabel(t: Pick<Tournament, "rebuy_until_level" | "rebuy_until_time" | "levels">) {
+  if (t.rebuy_until_time) return `ריביי עד השעה ${hhmm(t.rebuy_until_time)}`;
+  if (t.rebuy_until_level <= 0) return "";
+  const l = t.levels.filter((x) => !x.break)[t.rebuy_until_level - 1];
+  return `ריביי עד סוף שלב ${t.rebuy_until_level}${l ? ` (${l.sb}/${l.bb})` : ""}`;
+}
+
+/**
+ * The clock time for a "HH:MM" rebuy deadline: on the tournament's day,
+ * or the next day when it is earlier than the start (e.g. start 21:00, rebuys until 00:30).
+ */
+export function rebuyDeadline(startsAt: Date, time: string): Date {
+  const [h, m] = time.split(":").map(Number);
+  const d = new Date(startsAt);
+  d.setHours(h, m, 0, 0);
+  if (d.getTime() <= startsAt.getTime()) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+/**
+ * Money at the end. With 'upfront' everyone already paid the organizer, so the
+ * organizer just pays out the prizes. With 'end' it is the usual netting.
+ */
+export function upfrontPayouts(rows: { member_id: string; prize: number }[], organizerId: string) {
+  return rows
+    .filter((r) => r.prize > 0 && r.member_id !== organizerId)
+    .map((r) => ({ from: organizerId, to: r.member_id, amount: round2(r.prize) }));
 }
