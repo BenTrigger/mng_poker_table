@@ -12,6 +12,7 @@ import { signupDate, signupTime, whatsappUrl } from "@/lib/signup";
 import { formatMoney } from "@/lib/calc";
 import { TopBar } from "@/components/top-bar";
 import { PlaceInfo } from "@/components/place";
+import { useGeocode } from "@/lib/waze";
 import { Avatar, Badge, Button, Card, Empty, Sheet, Spinner, Toast } from "@/components/ui";
 import { T_STATUS, TournamentFormView } from "@/components/tournament-section";
 import type { Member, TournamentEntryView } from "@/lib/types";
@@ -25,6 +26,7 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { view, loading, notFound, reload } = useTournament(id, !!user);
+  const at = useGeocode(view?.tournament.address);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; tone?: "gold" | "loss" } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -74,7 +76,7 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
   const wait = entries.filter((e) => e.status === "waiting");
   const regOpen = t.registration_open && (t.status === "registration" || t.status === "running");
   const link = `${location.origin}/tr/${t.id}`;
-  const shareText = tournamentInviteText(t, table.name, inList.map((e) => e.display_name), wait.length, link);
+  const shareText = tournamentInviteText(t, table.name, inList.map((e) => e.display_name), wait.length, link, at);
 
   const run: RunFn = async (key, fn, ok) => {
     setBusy(key);
@@ -113,7 +115,7 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
               <CalendarClock className="size-4" /> <span className="num">{signupTime(t.starts_at)}</span>
             </span>
           </div>
-          <PlaceInfo host={t.location} address={t.address} />
+          <PlaceInfo host={t.location} address={t.address} at={at} />
           <div className="flex flex-wrap gap-1.5 pt-1">
             <Badge tone="gold">
               <Coins className="size-3" /> כניסה {formatMoney(Number(t.buy_in))}
