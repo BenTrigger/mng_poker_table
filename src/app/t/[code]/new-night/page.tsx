@@ -10,6 +10,8 @@ import { ChipSetEditor } from "@/components/chip-set-editor";
 import { formatMoney } from "@/lib/calc";
 import type { Chip } from "@/lib/types";
 
+const MAX_PLAYERS = 10;
+
 export default function NewNight({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
   const router = useRouter();
@@ -35,7 +37,7 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
     setChipSetId(ls.chip_set_id && t.chipSets.some((c) => c.id === ls.chip_set_id) ? ls.chip_set_id : t.chipSets[0]?.id ?? "");
     if (ls.chips_per_buyin) setChipsPer(ls.chips_per_buyin);
     if (ls.money_per_buyin) setMoneyPer(ls.money_per_buyin);
-    setSelected(ls.member_ids?.filter((id) => active.includes(id)) ?? active);
+    setSelected((ls.member_ids?.filter((id) => active.includes(id)) ?? active).slice(0, MAX_PLAYERS));
     if (ls.cashier_member_id && active.includes(ls.cashier_member_id)) setCashier(ls.cashier_member_id);
     setInit(true);
   }, [t.table, t.members, t.chipSets, init]);
@@ -54,7 +56,7 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
       .then(({ data }) => {
         if (!data?.length) return;
         setSignupId(id);
-        const ids = data.map((r) => r.member_id as string);
+        const ids = data.map((r) => r.member_id as string).slice(0, MAX_PLAYERS);
         setSelected(ids);
         setCashier((c) => (ids.includes(c) ? c : ""));
       });
@@ -72,7 +74,8 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
 
   const active = t.members.filter((m) => m.status === "active");
   const chipSet = t.chipSets.find((c) => c.id === chipSetId);
-  const toggle = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  // a poker night is one table: up to 10 players (bigger groups: open a tournament)
+  const toggle = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : s.length >= MAX_PLAYERS ? s : [...s, id]));
 
   async function saveSet(name: string, chips: Chip[]) {
     const { data } = await supabase().from("chip_sets").insert({ table_id: t.table!.id, name, chips }).select().single();
@@ -85,7 +88,7 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
     const { data } = await supabase().from("table_members").insert({ table_id: t.table!.id, display_name: guest.trim() }).select().single();
     setGuest("");
     await t.reload();
-    if (data) setSelected((s) => [...s, data.id]);
+    if (data) setSelected((s) => (s.length >= MAX_PLAYERS ? s : [...s, data.id]));
   }
 
   async function start() {
@@ -170,8 +173,11 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
 
         <section>
           <h2 className="mb-2 px-1 text-sm font-bold text-muted">
-            מי משחק הערב ({selected.length}) · <Landmark className="inline size-3.5" /> = קופאי
+            מי משחק הערב ({selected.length}/{MAX_PLAYERS}) · <Landmark className="inline size-3.5" /> = קופאי
           </h2>
+          {selected.length >= MAX_PLAYERS && (
+            <p className="mb-2 px-1 text-xs text-warn">השולחן מלא (עד {MAX_PLAYERS} שחקנים). יותר אנשים? פתחו טורניר עם כמה שולחנות.</p>
+          )}
           <Card className="space-y-1 p-2">
             {active.map((m) => {
               const on = selected.includes(m.id);

@@ -11,6 +11,8 @@ import { formatMoney, formatSigned, memberStats } from "@/lib/calc";
 import { Avatar, Badge, Button, Card, ChipDot, Empty, Field, Sheet, inputCls } from "@/components/ui";
 import { ChipSetEditor } from "@/components/chip-set-editor";
 import { UpcomingSignups } from "@/components/signup-section";
+import { TournamentsSection } from "@/components/tournament-section";
+import { TournamentStatsView } from "@/components/tournament-stats";
 
 export type Ctx = ReturnType<typeof useTable> & { table: PokerTable; me: Member; userId: string; profile: Profile | null };
 
@@ -81,6 +83,8 @@ export function NightTab({ ctx }: { ctx: Ctx }) {
       )}
 
       <UpcomingSignups tableId={ctx.table.id} isAdmin={ctx.isAdmin} />
+
+      <TournamentsSection tableId={ctx.table.id} isAdmin={ctx.isAdmin} lastSettings={ctx.table.last_settings?.tournament} />
 
       <section>
         <h2 className="mb-2 px-1 text-sm font-bold text-muted">החובות הפתוחים שלי</h2>
@@ -341,6 +345,31 @@ export function HistoryTab({ ctx }: { ctx: Ctx }) {
 // Stats tab
 // ---------------------------------------------------------------------------
 export function StatsTab({ ctx }: { ctx: Ctx }) {
+  const [kind, setKind] = useState<"cash" | "tournaments">("cash");
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 rounded-2xl bg-surface-2 p-1">
+        {(
+          [
+            ["cash", "ערבי פוקר"],
+            ["tournaments", "טורנירים"],
+          ] as const
+        ).map(([v, l]) => (
+          <button key={v} onClick={() => setKind(v)} className={`h-10 rounded-xl text-sm font-bold ${kind === v ? "bg-gold text-[#1d1405]" : "text-muted"}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+      {kind === "cash" ? (
+        <CashStats ctx={ctx} />
+      ) : (
+        <TournamentStatsView tableId={ctx.table.id} members={ctx.members} meId={ctx.me.id} seeAll={canSeeAll(ctx)} />
+      )}
+    </div>
+  );
+}
+
+function CashStats({ ctx }: { ctx: Ctx }) {
   const [rows, setRows] = useState<NightPlayer[]>([]);
   const closed = useMemo(() => ctx.nights.filter((n) => n.status === "closed"), [ctx.nights]);
   useEffect(() => {
@@ -521,7 +550,7 @@ export function SettingsTab({ ctx }: { ctx: Ctx }) {
 
       <Card className="space-y-4">
         <Choice
-          label="מי רואה סטטיסטיקות ותוצאות"
+          label="מי רואה סטטיסטיקות ותוצאות (ערבים וטורנירים)"
           value={ls.stats_visibility ?? "all"}
           onChange={(v) => saveSetting({ stats_visibility: v as "all" | "own" })}
           options={[
@@ -538,7 +567,7 @@ export function SettingsTab({ ctx }: { ctx: Ctx }) {
             ["players", "חלוקה אוטומטית"],
             ["cashier", "הכל דרך הקופאי"],
           ]}
-          hint={(ls.settle_mode ?? "players") === "players" ? "מינימום העברות בין השחקנים." : "המפסידים משלמים לקופאי, והקופאי משלם למנצחים."}
+          hint={(ls.settle_mode ?? "players") === "players" ? "מינימום העברות בין השחקנים." : "המפסידים משלמים לקופאי, והקופאי משלם למנצחים. בטורניר: דרך מי שפתח אותו."}
         />
       </Card>
 

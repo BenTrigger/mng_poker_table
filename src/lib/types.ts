@@ -46,6 +46,8 @@ export type LastSettings = {
   settle_mode?: "players" | "cashier";
   /** "all": everyone sees everyone's results; "own": players see only their own (admins see all) */
   stats_visibility?: "all" | "own";
+  /** the last tournament format, offered again for the next tournament */
+  tournament?: Partial<import("./tournament").TournamentForm>;
 };
 
 export type Member = {
@@ -184,4 +186,61 @@ export type SignupView = {
   table: { id: string; name: string; code: string };
   me: { id: string; status: Member["status"]; role: Member["role"] } | null;
   seats: SignupSeat[];
+};
+
+export type TournamentLevel = { sb?: number; bb?: number; ante?: number; minutes: number; break?: boolean };
+
+export type Tournament = {
+  id: string;
+  table_id: string;
+  name: string;
+  starts_at: string;
+  location: string | null;
+  note: string | null;
+  table_count: number;
+  seats_per_table: number;
+  buy_in: number;
+  starting_stack: number;
+  rebuy_until_level: number;
+  rebuy_price: number | null;
+  rebuy_chips: number | null;
+  addon_price: number | null;
+  addon_chips: number | null;
+  late_reg_until_level: number;
+  levels: TournamentLevel[];
+  registration_open: boolean;
+  status: "registration" | "running" | "finished" | "cancelled";
+  clock_anchor: string | null;
+  paused_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type TournamentEntry = {
+  id: string;
+  tournament_id: string;
+  member_id: string;
+  status: "registered" | "waiting" | "playing" | "busted";
+  table_no: number | null;
+  seat_no: number | null;
+  rebuys: number;
+  addon: boolean;
+  busted_at: string | null;
+  busted_by: string | null;
+  place: number | null;
+  prize: number | null;
+  created_at: string;
+};
+
+/** An entry as returned by get_tournament(), with the player's name */
+export type TournamentEntryView = TournamentEntry & { display_name: string; avatar_url: string | null; user_id: string | null };
+
+export type TournamentView = {
+  tournament: Tournament;
+  table: { id: string; name: string; code: string; stats_visibility: "all" | "own"; settle_mode: "players" | "cashier" };
+  me: { id: string; status: Member["status"]; role: Member["role"] } | null;
+  organizer_member_id: string | null;
+  entries: TournamentEntryView[];
 };

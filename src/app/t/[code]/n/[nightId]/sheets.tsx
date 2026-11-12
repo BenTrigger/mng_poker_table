@@ -558,7 +558,8 @@ export function AdminSheet({
     try {
       await f();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "משהו השתבש, נסה שוב");
+      const msg = e instanceof Error ? e.message : (e as { message?: string })?.message;
+      setErr(msg?.includes("table is full") ? "השולחן מלא (עד 10 שחקנים)." : msg || "משהו השתבש, נסה שוב");
     } finally {
       setBusy(null);
     }
@@ -656,6 +657,10 @@ export function AdminSheet({
 
         <section>
           <h3 className="mb-2 text-sm font-bold text-muted">הוספת שחקן באמצע הערב</h3>
+          {playing.length >= 10 ? (
+            <p className="text-sm text-muted">השולחן מלא (10 שחקנים). שחקן חדש נכנס כשמישהו קם.</p>
+          ) : (
+          <>
           {outside.length > 0 && (
             <div className="mb-3 space-y-2">
               {outside.map((m) => (
@@ -675,6 +680,8 @@ export function AdminSheet({
               <UserPlus className="size-4" /> הוספה
             </Button>
           </div>
+          </>
+          )}
         </section>
         {err && <p className="text-sm text-loss">{err}</p>}
       </div>
