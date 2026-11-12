@@ -23,7 +23,7 @@ export type Seat = {
 export function PokerTable({ seats, center, onSeat }: { seats: Seat[]; center: React.ReactNode; onSeat?: (id: string) => void }) {
   const n = Math.max(seats.length, 1);
   return (
-    <div className="relative mx-auto my-8 aspect-[3/4] w-full max-w-[400px] select-none">
+    <div className="relative mx-auto mb-8 mt-12 aspect-[3/4] w-full max-w-[400px] select-none">
       {/* rail + felt */}
       <div className="felt absolute inset-[14%_16%] rounded-[50%/38%]" />
       <div className="absolute inset-[14%_16%] grid place-items-center rounded-[50%/38%] p-6 text-center">{center}</div>

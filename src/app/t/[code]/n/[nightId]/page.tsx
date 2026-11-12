@@ -118,7 +118,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
         }
       />
 
-      <main className="mx-auto max-w-lg px-3 pb-36 pt-2">
+      <main className="mx-auto max-w-lg px-3 pb-40 pt-2">
         <PokerTable
           seats={seats}
           onSeat={(id) => setSheet({ player: id })}
