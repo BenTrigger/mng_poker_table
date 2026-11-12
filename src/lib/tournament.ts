@@ -3,7 +3,7 @@
  * Pure functions only (no Supabase), so they are easy to test.
  */
 import { round2 } from "./calc";
-import { wazeUrl } from "./signup";
+import { wazeUrl, type LatLng } from "./waze";
 import type { Tournament, TournamentEntry, TournamentLevel } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -318,11 +318,11 @@ export function balanceMoves(
 const dateLine = (s: string) =>
   `${new Date(s).toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "numeric" })} בשעה ${new Date(s).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`;
 
-export function tournamentInviteText(t: Tournament, tableName: string, names: string[], waiting: number, link: string) {
+export function tournamentInviteText(t: Tournament, tableName: string, names: string[], waiting: number, link: string, at?: LatLng | null) {
   const cap = t.table_count * t.seats_per_table;
   const lines = [`🏆 ${t.name} - ${tableName}`, `📅 ${dateLine(t.starts_at)}`];
   if (t.location) lines.push(`🏠 מארח: ${t.location}`);
-  if (t.address) lines.push(`📍 ${t.address}`, `🚗 ניווט בוויז: ${wazeUrl(t.address)}`);
+  if (t.address) lines.push(`📍 ${t.address}`, `🚗 ניווט בוויז: ${wazeUrl(t.address, at)}`);
   lines.push(`💰 כניסה ₪${Number(t.buy_in).toLocaleString()} · ${Number(t.starting_stack).toLocaleString()} צ'יפים`);
   if (t.rebuy_until_level > 0) lines.push(`🔁 ריביי עד סוף שלב ${t.rebuy_until_level}`);
   if (t.note) lines.push(`📝 ${t.note}`);
