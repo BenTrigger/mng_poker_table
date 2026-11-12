@@ -283,7 +283,7 @@ export function TournamentFormView({
         </Field>
       </div>
 
-      <Field label="קצב עליית בליינדים">
+      <Field group label="קצב עליית בליינדים">
         <Pills
           value={f.speed}
           options={(Object.keys(SPEEDS) as Speed[]).map((s) => ({ v: s, label: `${SPEEDS[s].label} · ${SPEEDS[s].minutes} דק'` }))}
@@ -296,7 +296,7 @@ export function TournamentFormView({
         </p>
       )}
 
-      <Field label="ריביי (קנייה חוזרת למי שנגמרו לו הצ'יפים)">
+      <Field group label="ריביי (קנייה חוזרת למי שנגמרו לו הצ'יפים)">
         <Pills
           value={f.rebuyLevels}
           options={[
@@ -308,7 +308,7 @@ export function TournamentFormView({
           onChange={(v) => set("rebuyLevels", v)}
         />
       </Field>
-      <Field label="הרשמה מאוחרת">
+      <Field group label="הרשמה מאוחרת">
         <Pills
           value={f.lateReg}
           options={[

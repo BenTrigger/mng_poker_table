@@ -127,6 +127,7 @@ export function useTableSignups(tableId: string) {
 export function signupError(msg: string) {
   if (msg.includes("seat taken")) return "מישהו תפס את המקום הזה הרגע. בחר מקום אחר.";
   if (msg.includes("signup is closed")) return "ההרשמה נסגרה.";
+  if (msg.includes("signup already started")) return "הערב כבר נפתח, אז אי אפשר לבטל דרך ההרשמה. דבר עם המנהל.";
   if (msg.includes("removed from table")) return "הוסרת מהשולחן הזה.";
   if (msg.includes("signup not found")) return "ההרשמה לא נמצאה.";
   return msg;

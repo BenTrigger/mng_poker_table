@@ -238,7 +238,7 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
                     </>
                   )}
                 </div>
-                <Button size="lg" variant="danger" loading={busy === "leave"} onClick={() => confirm("לצאת מההרשמה?") && leave()}>
+                <Button size="lg" variant="danger" loading={busy === "leave"} onClick={() => confirm("לצאת מההרשמה?") && leave()} aria-label="יציאה מההרשמה">
                   <LogOut className="size-5" />
                 </Button>
               </>

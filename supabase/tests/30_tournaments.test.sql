@@ -104,6 +104,19 @@ select public.reopen_tournament(tests.id('t'));
 select tests.eq((select count(*)::int from tournament_entries where tournament_id = tests.id('t') and status = 'playing'), 1, 'reopen brings the winner back');
 reset role;
 
+-- a deal: finishing with two still in, then reopening, brings both back
+update tournament_entries set status = 'playing', busted_at = null, table_no = 1, seat_no = 2 where id = tests.id('e_p4');
+select tests.login('admin');
+select public.finish_tournament(tests.id('t'), (
+  select jsonb_agg(jsonb_build_object('entry_id', id, 'place', rn, 'prize', case rn when 1 then 250 when 2 then 250 else 0 end))
+    from (select id, row_number() over (order by status = 'playing' desc, busted_at desc) rn
+            from tournament_entries where tournament_id = tests.id('t') and status in ('playing', 'busted')) x));
+select public.reopen_tournament(tests.id('t'));
+select tests.eq((select count(*)::int from tournament_entries where tournament_id = tests.id('t') and status = 'playing'), 2, 'reopening a deal brings everyone in the deal back');
+select tests.eq((select count(distinct seat_no)::int from tournament_entries where tournament_id = tests.id('t') and status = 'playing' and table_no = 1), 2, 'each on their own seat');
+select tests.eq((select count(*)::int from tournament_entries where tournament_id = tests.id('t') and place is not null), 0, 'places are cleared');
+reset role;
+
 -- a regular night is one table of at most 10
 select tests.login('admin');
 with x as (insert into game_nights (table_id, chips_per_buyin, money_per_buyin) values (tests.id('table'), 1000, 100) returning id) select tests.put('night', id) from x;
