@@ -604,6 +604,7 @@ export function SettingsTab({ ctx }: { ctx: Ctx }) {
       <Sheet open={!!editing} onClose={() => setEditing(null)} title={editing === "new" ? "ערכה חדשה" : "עריכת ערכה"}>
         {editing && (
           <ChipSetEditor
+            tableId={ctx.table.id}
             key={editing === "new" ? "new" : editing.id}
             initial={editing === "new" ? undefined : editing.chips}
             initialName={editing === "new" ? undefined : editing.name}
