@@ -293,7 +293,7 @@ export function TournamentFormView({
         </Field>
       </div>
 
-      <Field label="תשלום">
+      <Field group label="תשלום">
         <Pills
           value={f.payment}
           options={[
@@ -309,7 +309,7 @@ export function TournamentFormView({
           : "אף אחד לא משלם בזמן המשחק. בסוף האפליקציה מחשבת מי מעביר למי."}
       </p>
 
-      <Field label="קצב עליית בליינדים">
+      <Field group label="קצב עליית בליינדים">
         <Pills
           value={f.speed}
           options={(Object.keys(SPEEDS) as Speed[]).map((s) => ({ v: s, label: `${SPEEDS[s].label} · ${SPEEDS[s].minutes} דק'` }))}
@@ -322,7 +322,7 @@ export function TournamentFormView({
         </p>
       )}
 
-      <Field label="ריביי (קנייה חוזרת למי שנגמרו לו הצ'יפים)">
+      <Field group label="ריביי (קנייה חוזרת למי שנגמרו לו הצ'יפים)">
         <Pills
           value={f.rebuyBy}
           options={[
@@ -353,7 +353,7 @@ export function TournamentFormView({
           <span className="text-xs text-muted">אחרי השעה הזו אין יותר ריביי</span>
         </div>
       )}
-      <Field label="הרשמה מאוחרת">
+      <Field group label="הרשמה מאוחרת">
         <Pills
           value={f.lateReg}
           options={[

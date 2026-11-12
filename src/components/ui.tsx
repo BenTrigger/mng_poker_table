@@ -84,13 +84,15 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
   );
 }
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+/** A labelled input. With `group`, a labelled set of buttons (a <label> would name every button after itself). */
+export function Field({ label, hint, group, children }: { label: string; hint?: string; group?: boolean; children: React.ReactNode }) {
+  const Tag = group ? "div" : "label";
   return (
-    <label className="block">
+    <Tag className="block" {...(group ? { role: "group", "aria-label": label } : {})}>
       <span className="mb-1.5 block text-sm font-medium text-muted">{label}</span>
       {children}
       {hint && <span className="mt-1 block text-xs text-muted">{hint}</span>}
-    </label>
+    </Tag>
   );
 }
 
