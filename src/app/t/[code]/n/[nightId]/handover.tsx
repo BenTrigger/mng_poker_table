@@ -122,7 +122,8 @@ export function HandoverSheet({
           <p className="text-sm text-muted">
             {fromId ? `${nameOf(members, fromId)} מעביר את הקופה.` : "אין קופאי כרגע."} סופרים את כל הערימות על השולחן, מוודאים שאין חוסרים, ומעבירים את התפקיד.
           </p>
-          <Field label="מי הקופאי החדש?">
+          <div>
+            <div className="mb-1.5 text-sm font-medium text-muted">מי הקופאי החדש?</div>
             <div className="flex flex-wrap gap-2">
               {candidates.map((p) => (
                 <button
@@ -135,7 +136,7 @@ export function HandoverSheet({
               ))}
               {candidates.length === 0 && <span className="text-sm text-muted">אין שחקנים פעילים אחרים בערב</span>}
             </div>
-          </Field>
+          </div>
           {fromPlayer && (
             <label className="flex items-center gap-3 rounded-2xl bg-surface-2 p-3 text-sm">
               <input type="checkbox" className="size-5 accent-[var(--color-gold)]" checked={leaves} onChange={(e) => setLeaves(e.target.checked)} />

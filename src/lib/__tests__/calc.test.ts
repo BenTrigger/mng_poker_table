@@ -52,6 +52,21 @@ describe("calc", () => {
     expect(out.reduce((s, x) => s + x.net, 0)).toBeCloseTo(0, 2);
   });
 
+  it("balanceNets leaves no stray agorot after rounding (night from the simulation)", () => {
+    // 50 chips missing at ₪0.1 a chip; shares of ₪5 round to 0.58 + 3.26 + 0.47 + 0.70 = 5.01
+    const out = balanceNets(
+      [
+        { id: "dana", net: -50, finalChips: 500 },
+        { id: "avi", net: -20, finalChips: 2800 },
+        { id: "michal", net: -5, finalChips: 400 },
+        { id: "noa", net: -40, finalChips: 600 },
+      ],
+      110, // Ron +60 and Yossi +50 already cashed out
+    );
+    expect(Math.round((out.reduce((s, x) => s + x.net, 0) + 110) * 100)).toBe(0);
+    expect(settle([...out, { id: "ron", net: 60 }, { id: "yossi", net: 50 }]).reduce((s, t) => s + t.amount, 0)).toBeCloseTo(110, 2);
+  });
+
   it("chipSetTotal", () => {
     expect(chipSetTotal([{ color: "red", count: 3 }, { color: "blue", count: 2 }], [
       { color: "red", value: 5 }, { color: "blue", value: 25 },

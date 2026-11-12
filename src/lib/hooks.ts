@@ -75,18 +75,22 @@ export function useTable(code: string, userId: string | undefined) {
     load();
   }, [load]);
 
+  // Subscribe once per table. Depending on the table object itself would drop
+  // and rejoin the channel after every reload, losing changes made meanwhile.
+  const tableId = table?.id;
   useEffect(() => {
-    if (!table) return;
+    if (!tableId) return;
     const sb = supabase();
     const ch = sb
-      .channel(`table-${table.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "table_members", filter: `table_id=eq.${table.id}` }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "game_nights", filter: `table_id=eq.${table.id}` }, load)
-      .subscribe();
+      .channel(`table-${tableId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "table_members", filter: `table_id=eq.${tableId}` }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "game_nights", filter: `table_id=eq.${tableId}` }, load)
+      // changes made before the channel was ready are not replayed: reload once it is
+      .subscribe((status) => status === "SUBSCRIBED" && load());
     return () => {
       sb.removeChannel(ch);
     };
-  }, [table, load]);
+  }, [tableId, load]);
 
   const me = members.find((m) => m.user_id === userId) ?? null;
   return { table, members, chipSets, nights, me, isAdmin: me?.role === "admin" && me.status === "active", loading, notFound, reload: load };
@@ -137,7 +141,7 @@ export function useNight(nightId: string, enabled: boolean) {
       .on("postgres_changes", { event: "*", schema: "public", table: "night_events", filter: f }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "settlements", filter: f }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "cashier_handovers", filter: f }, load)
-      .subscribe();
+      .subscribe((status) => status === "SUBSCRIBED" && load());
     // refresh when the app comes back to the foreground (phones suspend sockets)
     const vis = () => document.visibilityState === "visible" && load();
     document.addEventListener("visibilitychange", vis);

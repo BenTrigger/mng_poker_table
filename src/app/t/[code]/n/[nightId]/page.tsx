@@ -212,7 +212,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
           canManage={canManage}
         />
       )}
-      <CloseSheet open={sheet === "close"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} pendingCount={pending.length + flagged.length} handovers={n.handovers} table={t.table!} />
+      <CloseSheet open={sheet === "close"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} pendingCount={pending.length + flagged.length} flaggedCount={flagged.length} handovers={n.handovers} table={t.table!} />
       <AdminSheet open={sheet === "admin"} onClose={() => setSheet(null)} night={night} players={n.players} members={t.members} requests={n.requests} onHandover={() => setSheet("handover")} onCashout={(id) => setSheet({ player: id })} />
       <HandoverSheet open={sheet === "handover"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} handovers={n.handovers} />
     </>

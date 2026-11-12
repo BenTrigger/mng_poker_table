@@ -11,6 +11,15 @@ import { Avatar, Badge, Button, Card, ChipDot, Field, Sheet, inputCls } from "@/
 
 export const nameOf = (members: Member[], id: string) => members.find((m) => m.id === id)?.display_name ?? "שחקן";
 
+/** Readable message for errors the database raises on chip requests and cash-outs. */
+export function nightError(e: unknown): string {
+  const msg = (e as { message?: string })?.message ?? String(e);
+  if (msg.includes("player is not playing")) return "השחקן כבר לא משחק בערב (קם מהשולחן), אי אפשר לרשום לו צ'יפים.";
+  if (msg.includes("night is closed")) return "הערב כבר נסגר.";
+  if (msg.includes("flagged chip request")) return "יש לשחקן מסירה שממתינה לאישור מנהל. קודם מחליטים עליה, ואז סוגרים לו חשבון.";
+  return msg || "משהו השתבש, נסה שוב";
+}
+
 export async function myUid() {
   return (await supabase().auth.getUser()).data.user?.id ?? null;
 }
@@ -56,12 +65,14 @@ export function RequestSheet({
   const [value, setValue] = useState<number>(Number(night.chips_per_buyin));
   const [forId, setForId] = useState(me.id);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setMode("chips");
       setValue(Number(night.chips_per_buyin));
       setForId(playing.some((p) => p.member_id === me.id) ? me.id : playing[0]?.member_id ?? me.id);
+      setErr(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -72,11 +83,16 @@ export function RequestSheet({
 
   async function send() {
     setBusy(true);
-    const { data } = await supabase()
+    setErr(null);
+    const { data, error } = await supabase()
       .from("chip_requests")
       .insert({ night_id: night.id, member_id: forId, requested_by: await myUid(), mode, chips })
       .select()
       .single();
+    if (error) {
+      setBusy(false);
+      return setErr(nightError(error));
+    }
     await logEvent(night.id, "request", { member_id: forId, chips, money, request_id: data?.id });
     setBusy(false);
     onClose();
@@ -135,6 +151,7 @@ export function RequestSheet({
           <span className="num font-bold text-ink">{chips.toLocaleString()}</span> צ'יפים = <span className="num font-bold text-ink">{formatMoney(money)}</span>
         </div>
         {chipSet && chips > 0 && <Breakdown total={chips} chipSet={chipSet} />}
+        {err && <p className="text-sm text-loss">{err}</p>}
         <Button size="lg" className="w-full" disabled={chips <= 0} loading={busy} onClick={send}>
           שליחה לקופאי
         </Button>
@@ -317,6 +334,7 @@ export function CashierSheet({
   const [step, setStep] = useState<"count" | "mismatch">("count");
   const [result, setResult] = useState<{ total: number; path: string | null; detected: number | null } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
   const queue = requests.filter((r) => r.status === "pending" || r.status === "flagged");
 
   useEffect(() => {
@@ -324,56 +342,75 @@ export function CashierSheet({
       setActive(null);
       setStep("count");
       setResult(null);
+      setErr(null);
     }
   }, [open]);
 
+  async function run(f: () => Promise<void>) {
+    setBusy(true);
+    setErr(null);
+    try {
+      await f();
+    } catch (e) {
+      setErr(nightError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function approve(r: ChipRequest, given: number, extra: Partial<ChipRequest> = {}, kind = "approved") {
-    await supabase()
+    const { error } = await supabase()
       .from("chip_requests")
       .update({ status: "approved", given_chips: given, approved_by: await myUid(), approved_at: new Date().toISOString(), ...extra })
       .eq("id", r.id);
+    if (error) throw error;
     await logEvent(night.id, kind, { request_id: r.id, member_id: r.member_id, requested: Number(r.chips), given, detected: extra.detected_chips ?? r.detected_chips });
   }
 
-  async function onCounted({ total, photo, detected }: { total: number; photo: Blob | null; detected: number | null }) {
+  const onCounted = ({ total, photo, detected }: { total: number; photo: Blob | null; detected: number | null }) => run(async () => {
     if (!active) return;
-    setBusy(true);
     const path = photo ? await uploadPhoto(night.id, `req-${active.id}`, photo).catch(() => null) : null;
     const requested = Number(active.chips);
-    if (total === requested && (detected == null || detected === requested)) {
-      await approve(active, total, { photo_path: path, detected_chips: detected });
-      setBusy(false);
+    if (total === requested) {
+      // matches the request. If the photo saw something else and the cashier
+      // fixed the count by hand, that is a logged correction, not a new question.
+      const corrected = detected != null && detected !== requested;
+      await approve(
+        active,
+        total,
+        { photo_path: path, detected_chips: detected, ...(corrected ? { note: "הקופאי תיקן את ספירת התמונה" } : {}) },
+        corrected ? "count_corrected" : "approved",
+      );
       setActive(null);
       return;
     }
     setResult({ total, path, detected });
     setStep("mismatch");
-    setBusy(false);
-  }
+  });
 
-  async function resolveMismatch(choice: "actual" | "flag") {
+  const resolveMismatch = (choice: "actual" | "flag") => run(async () => {
     if (!active || !result) return;
-    setBusy(true);
     if (choice === "actual") {
       // the cashier really handed a different amount: debt follows what was handed
       await approve(active, result.total, { photo_path: result.path, detected_chips: result.detected, note: "תיקון ידני של הקופאי" }, "manual_correction");
     } else {
       // cashier says the requested amount was handed and the count is wrong: admin decides
-      await supabase()
+      const { error } = await supabase()
         .from("chip_requests")
         .update({ status: "flagged", given_chips: Number(active.chips), detected_chips: result.detected ?? result.total, photo_path: result.path })
         .eq("id", active.id);
+      if (error) throw error;
       await logEvent(night.id, "flagged", { request_id: active.id, member_id: active.member_id, requested: Number(active.chips), detected: result.detected ?? result.total });
     }
-    setBusy(false);
     setActive(null);
     setStep("count");
-  }
+  });
 
-  async function reject(r: ChipRequest) {
-    await supabase().from("chip_requests").update({ status: "rejected" }).eq("id", r.id);
+  const reject = (r: ChipRequest) => run(async () => {
+    const { error } = await supabase().from("chip_requests").update({ status: "rejected" }).eq("id", r.id);
+    if (error) throw error;
     await logEvent(night.id, "rejected", { request_id: r.id, member_id: r.member_id });
-  }
+  });
 
   if (active) {
     const requested = Number(active.chips);
@@ -393,6 +430,7 @@ export function CashierSheet({
               )}
             </Card>
             <ChipCounter chipSet={chipSet} expected={requested} cta="מסרתי, אישור" busy={busy} onDone={onCounted} />
+            {err && <p className="text-sm text-loss">{err}</p>}
           </div>
         ) : (
           <div className="space-y-4">
@@ -414,6 +452,7 @@ export function CashierSheet({
             <Button className="w-full" variant="ghost" onClick={() => setStep("count")}>
               ספירה מחדש
             </Button>
+            {err && <p className="text-sm text-loss">{err}</p>}
           </div>
         )}
       </Sheet>
@@ -445,10 +484,10 @@ export function CashierSheet({
                   </div>
                   {isAdmin ? (
                     <div className="grid grid-cols-2 gap-2">
-                      <Button size="sm" onClick={() => approve(r, Number(r.given_chips), {}, "admin_approved")}>
+                      <Button size="sm" disabled={busy} onClick={() => run(() => approve(r, Number(r.given_chips), {}, "admin_approved"))}>
                         <Check className="size-4" /> תקין, {Number(r.given_chips).toLocaleString()}
                       </Button>
-                      <Button size="sm" variant="soft" onClick={() => approve(r, Number(r.detected_chips), {}, "admin_corrected")}>
+                      <Button size="sm" variant="soft" disabled={busy} onClick={() => run(() => approve(r, Number(r.detected_chips), {}, "admin_corrected"))}>
                         לפי התמונה, {Number(r.detected_chips).toLocaleString()}
                       </Button>
                     </div>
@@ -458,7 +497,7 @@ export function CashierSheet({
                 </>
               ) : (
                 <div className="flex gap-2">
-                  <Button size="sm" className="flex-1" onClick={() => setActive(r)}>
+                  <Button size="sm" className="flex-1" onClick={() => { setErr(null); setActive(r); }}>
                     <Camera className="size-4" /> מסירה וצילום
                   </Button>
                   <Button size="sm" variant="danger" onClick={() => reject(r)} aria-label="דחייה">
@@ -470,6 +509,7 @@ export function CashierSheet({
           ))}
         </div>
       )}
+      {err && <p className="mt-3 text-sm text-loss">{err}</p>}
       <Button variant="ghost" className="mt-4 w-full" onClick={onHandover}>
         <ArrowLeftRight className="size-4" /> החלפת קופאי (ספירה והעברת הקופה)
       </Button>
@@ -491,24 +531,34 @@ export function PlayerSheet({
   const mine = requests.filter((r) => r.member_id === memberId && r.status !== "rejected");
   const [cashout, setCashout] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
   if (!p || !l) return null;
   const closed = night.status === "closed";
+  // chips the admin still has to decide on would change the debt after the cash-out
+  const flagged = mine.filter((r) => r.status === "flagged").length;
+  const waiting = mine.filter((r) => r.status === "pending").length;
 
   async function doCashout({ total, photo, detected, manual }: { total: number; photo: Blob | null; detected: number | null; manual: boolean }) {
     setBusy(true);
+    setErr(null);
     const path = photo ? await uploadPhoto(night.id, `out-${memberId}`, photo).catch(() => null) : null;
     const net = round2(chipsToMoney(total, rate) - l!.boughtMoney);
-    await supabase()
+    const { error } = await supabase()
       .from("night_players")
       .update({ status: "out", final_chips: total, final_photo_path: path, left_at: new Date().toISOString(), bought_money: l!.boughtMoney, net })
       .eq("id", p!.id);
+    if (error) {
+      setBusy(false);
+      return setErr(nightError(error));
+    }
     await logEvent(night.id, "cashout", { member_id: memberId, chips: total, detected, manual, net });
     setBusy(false);
     onClose();
   }
 
   async function undoCashout() {
-    await supabase().from("night_players").update({ status: "playing", final_chips: null, left_at: null, net: null, bought_money: null }).eq("id", p!.id);
+    const { error } = await supabase().from("night_players").update({ status: "playing", final_chips: null, left_at: null, net: null, bought_money: null }).eq("id", p!.id);
+    if (error) return setErr(nightError(error));
     await logEvent(night.id, "cashout_undone", { member_id: memberId });
     onClose();
   }
@@ -518,7 +568,9 @@ export function PlayerSheet({
       {cashout ? (
         <div className="space-y-3">
           <p className="text-sm text-muted">ספירת הצ'יפים של {nameOf(members, memberId)} ביציאה מהשולחן. החוב שלו ייסגר לפי הספירה ולא יתווסף לו חוב בהמשך הערב.</p>
+          {waiting > 0 && <p className="rounded-xl bg-warn/10 p-2 text-xs text-warn">יש לו {waiting} בקשות שעוד לא נמסרו. הן יבוטלו כשהוא קם.</p>}
           <ChipCounter chipSet={chipSet} cta="סגירת החשבון שלו" busy={busy} onDone={doCashout} />
+          {err && <p className="text-sm text-loss">{err}</p>}
         </div>
       ) : (
         <div className="space-y-4">
@@ -553,11 +605,17 @@ export function PlayerSheet({
               <PhotoThumb path={p.final_photo_path} /> צילום ספירת הסיום ({Number(p.final_chips).toLocaleString()} צ'יפים)
             </div>
           )}
+          {canManage && !closed && p.status === "playing" && flagged > 0 && (
+            <p className="rounded-xl bg-warn/10 p-3 text-sm text-warn">
+              יש מסירה שממתינה לאישור מנהל. קודם מחליטים עליה בקופה, ואז אפשר לסגור לו חשבון.
+            </p>
+          )}
           {canManage && !closed && p.status === "playing" && (
-            <Button variant="soft" className="w-full" onClick={() => setCashout(true)}>
+            <Button variant="soft" className="w-full" disabled={flagged > 0} onClick={() => setCashout(true)}>
               <LogOut className="size-4" /> קם מהשולחן: ספירה וסגירת חוב
             </Button>
           )}
+          {err && <p className="text-sm text-loss">{err}</p>}
           {canManage && !closed && p.status === "out" && (
             <Button variant="ghost" className="w-full" onClick={undoCashout}>
               חזר לשחק (ביטול יציאה)
@@ -735,9 +793,9 @@ export function AdminSheet({
 // End of night: count everyone, check the gap, settle and close
 // ---------------------------------------------------------------------------
 export function CloseSheet({
-  open, onClose, night, players, lines, members, chipSet, pendingCount, handovers = [], table,
+  open, onClose, night, players, lines, members, chipSet, pendingCount, flaggedCount = 0, handovers = [], table,
 }: {
-  open: boolean; onClose: () => void; night: GameNight; players: NightPlayer[]; lines: PlayerLine[]; members: Member[]; chipSet: ChipSet | null; pendingCount: number; handovers?: CashierHandover[]; table: PokerTable;
+  open: boolean; onClose: () => void; night: GameNight; players: NightPlayer[]; lines: PlayerLine[]; members: Member[]; chipSet: ChipSet | null; pendingCount: number; flaggedCount?: number; handovers?: CashierHandover[]; table: PokerTable;
 }) {
   const rate = chipRate(night);
   const cashierId = night.cashier_member_id;
@@ -746,6 +804,7 @@ export function CloseSheet({
   const [counts, setCounts] = useState<Record<string, { total: number; photo: Blob | null }>>({});
   const [counting, setCounting] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   const allCounted = playing.every((p) => counts[p.member_id] != null);
   const { handed, counted, gap: gapChips } = chipCheck(
@@ -772,18 +831,38 @@ export function CloseSheet({
   async function finish() {
     if (!preview) return;
     setBusy(true);
+    setErr(null);
+    try {
+      await closeNight(preview);
+      onClose();
+    } catch (e) {
+      setErr(`הסגירה לא הושלמה: ${nightError(e)}. אפשר לנסות שוב.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function closeNight(preview: { nets: { id: string; net: number }[]; transfers: { from: string; to: string; amount: number }[] }) {
     const sb = supabase();
+    const ok = <T extends { error: unknown }>(r: T) => {
+      if (r.error) throw r.error;
+      return r;
+    };
     for (const p of playing) {
       const c = counts[p.member_id];
       const l = lines.find((x) => x.member_id === p.member_id)!;
       const path = c.photo ? await uploadPhoto(night.id, `final-${p.member_id}`, c.photo).catch(() => null) : null;
-      await sb
-        .from("night_players")
-        .update({ final_chips: c.total, final_photo_path: path, bought_money: l.boughtMoney, net: preview.nets.find((n) => n.id === p.member_id)!.net })
-        .eq("id", p.id);
+      ok(
+        await sb
+          .from("night_players")
+          .update({ final_chips: c.total, final_photo_path: path, bought_money: l.boughtMoney, net: preview.nets.find((n) => n.id === p.member_id)!.net })
+          .eq("id", p.id),
+      );
     }
+    // a retry after a failed close must not leave the transfers twice
+    ok(await sb.from("settlements").delete().eq("night_id", night.id));
     if (preview.transfers.length) {
-      await sb.from("settlements").insert(preview.transfers.map((t) => ({ night_id: night.id, from_member: t.from, to_member: t.to, amount: t.amount })));
+      ok(await sb.from("settlements").insert(preview.transfers.map((t) => ({ night_id: night.id, from_member: t.from, to_member: t.to, amount: t.amount }))));
     }
     await logEvent(night.id, "night_closed", { gap_chips: gapChips, transfers: preview.transfers.length, settle_mode: mode });
     // remember the choice for next time
@@ -791,9 +870,7 @@ export function CloseSheet({
     // photos are only kept until the night is closed and balanced
     const { data: files } = await sb.storage.from("chip-photos").list(night.id, { limit: 1000 });
     if (files?.length) await sb.storage.from("chip-photos").remove(files.map((f) => `${night.id}/${f.name}`));
-    await sb.from("game_nights").update({ status: "closed", closed_at: new Date().toISOString(), photos_purged: true }).eq("id", night.id);
-    setBusy(false);
-    onClose();
+    ok(await sb.from("game_nights").update({ status: "closed", closed_at: new Date().toISOString(), photos_purged: true }).eq("id", night.id));
   }
 
   if (counting) {
@@ -814,9 +891,14 @@ export function CloseSheet({
   return (
     <Sheet open={open} onClose={onClose} title="סגירת ערב">
       <div className="space-y-4">
-        {pendingCount > 0 && (
+        {flaggedCount > 0 && (
+          <div className="flex items-center gap-2 rounded-2xl border border-warn/40 bg-warn/10 p-3 text-sm font-bold text-warn">
+            <AlertTriangle className="size-4 shrink-0" /> יש {flaggedCount} מסירות שממתינות להחלטה שלך בקופה. הצ'יפים כבר על השולחן, אז קודם מחליטים עליהן ואז סוגרים.
+          </div>
+        )}
+        {pendingCount - flaggedCount > 0 && (
           <div className="flex items-center gap-2 rounded-2xl bg-warn/10 p-3 text-sm text-warn">
-            <AlertTriangle className="size-4" /> יש {pendingCount} בקשות פתוחות בקופה. הן לא ייספרו.
+            <AlertTriangle className="size-4" /> יש {pendingCount - flaggedCount} בקשות פתוחות בקופה. הן לא ייספרו.
           </div>
         )}
         <p className="text-sm text-muted">ספרו את הצ'יפים של כל מי שעדיין משחק. אפשר לצלם וזה ייספר לפי צבעים.</p>
@@ -894,9 +976,10 @@ export function CloseSheet({
               </div>
             )}
             <Transfers transfers={preview.transfers} members={members} />
-            <Button size="lg" className="w-full" loading={busy} onClick={finish}>
+            <Button size="lg" className="w-full" loading={busy} disabled={flaggedCount > 0} onClick={finish}>
               <Check className="size-5" /> סגירה סופית
             </Button>
+            {err && <p className="text-sm text-loss">{err}</p>}
             <p className="text-center text-xs text-muted">בסגירה התמונות של הערב נמחקות והחובות נשמרים.</p>
           </>
         )}
@@ -1028,6 +1111,7 @@ const EVENT_TEXT: Record<string, (p: Record<string, unknown>, n: (id: unknown) =
   approved: (p, n) => `נמסרו ל${n(p.member_id)} ${Number(p.given).toLocaleString()} צ'יפים`,
   manual_correction: (p, n) => `תיקון ידני: ${n(p.member_id)} ביקש ${Number(p.requested).toLocaleString()}, נמסרו ${Number(p.given).toLocaleString()}`,
   flagged: (p, n) => `אי התאמה אצל ${n(p.member_id)}: ביקש ${Number(p.requested).toLocaleString()}, זוהו ${Number(p.detected).toLocaleString()}`,
+  count_corrected: (p, n) => `נמסרו ל${n(p.member_id)} ${Number(p.given).toLocaleString()} צ'יפים (בתמונה זוהו ${Number(p.detected).toLocaleString()}, הקופאי תיקן את הספירה)`,
   admin_approved: (p, n) => `המנהל אישר את המסירה ל${n(p.member_id)} (${Number(p.given).toLocaleString()})`,
   admin_corrected: (p, n) => `המנהל תיקן את המסירה ל${n(p.member_id)} ל-${Number(p.given).toLocaleString()}`,
   rejected: (p, n) => `בקשה של ${n(p.member_id)} נדחתה`,

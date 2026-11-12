@@ -1,6 +1,6 @@
 {
   "name": "mng-poker-table",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -11,6 +11,7 @@
     "test:db": "./scripts/test-db.sh",
     "test:e2e": "playwright test",
     "test:e2e:live": "BASE_URL=https://pokertable-rho.vercel.app playwright test",
+    "test:sim": "./scripts/sim-night.sh",
     "test:all": "npm test && npm run test:db && npm run test:e2e",
     "db:migrate": "node scripts/migrate.mjs"
   },
