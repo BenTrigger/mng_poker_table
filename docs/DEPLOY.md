@@ -1,49 +1,37 @@
-# העלאה אוטומטית · pokertable.realizeaisolution.com
+# העלאה ל-Vercel · pokertable.realizeaisolution.com
 
-כל push ל-`main` מריץ את `.github/workflows/deploy.yml`, שעושה הכל לבד:
-מיגרציות למסד הנתונים ב-Supabase, הגדרות התחברות (כולל Google), בנייה, והעלאה ל-Cloudflare Workers בדומיין.
-אין שום פעולה ידנית בגרסאות. מגדירים את הסודות פעם אחת ושוכחים.
+Vercel בונה ומעלה אוטומטית בכל push לענף הראשי של הריפו. כל עדכון עולה לבד, והמשתמשים רואים "גרסה חדשה זמינה".
 
 ## הגדרה חד-פעמית
 
-### 1. Cloudflare (טוקן)
-[dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) → Create Token → **Edit Cloudflare Workers** (תבנית) →
-ב-Zone Resources לבחור `realizeaisolution.com`, ולהוסיף הרשאה `Zone · DNS · Edit` → Create.
-- `CLOUDFLARE_API_TOKEN` = הטוקן
-- `CLOUDFLARE_ACCOUNT_ID` = Account ID (מופיע בצד ימין בדף הבית של הדומיין)
+### 1. Supabase
+1. פרויקט חדש (Region: Frankfurt). התוכנית החינמית מספיקה.
+2. SQL Editor: מריצים את הקבצים ב-`supabase/migrations` לפי הסדר.
+3. Authentication → URL Configuration:
+   - Site URL: `https://pokertable.realizeaisolution.com`
+   - Redirect URLs: `https://pokertable.realizeaisolution.com/**`, `https://*.vercel.app/**`, `http://localhost:3000/**`
+4. Authentication → Providers → Google: Client ID + Secret (שלב 2).
 
-### 2. Supabase
-צור פרויקט ב-[supabase.com](https://supabase.com/dashboard) (Region: Frankfurt), ושמור את סיסמת מסד הנתונים.
-- `SUPABASE_PROJECT_REF` = המזהה מכתובת הפרויקט (`https://supabase.com/dashboard/project/<REF>`)
-- `SUPABASE_DB_PASSWORD` = סיסמת מסד הנתונים
-- `SUPABASE_ACCESS_TOKEN` = טוקן אישי מ-[Account → Access Tokens](https://supabase.com/dashboard/account/tokens)
-
-### 3. Google
+### 2. Google OAuth
 [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials) → Create credentials → OAuth client ID → Web application:
 - Authorized JavaScript origins: `https://pokertable.realizeaisolution.com`
-- Authorized redirect URIs: `https://<REF>.supabase.co/auth/v1/callback`
+- Authorized redirect URIs: `https://<project-ref>.supabase.co/auth/v1/callback`
 
-ב-OAuth consent screen: App name "All In", ואז **Publish app**.
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+OAuth consent screen: App name "All In" → **Publish app**.
 
-### 4. אופציונלי
-- `ANTHROPIC_API_KEY`: ספירת צ'יפים מתמונה ([console.anthropic.com](https://console.anthropic.com))
+### 3. Vercel
+1. Add New → Project → Import `BenTrigger/mng_poker_table` (Framework: Next.js, בלי לשנות כלום).
+2. Environment Variables (אם חיברת את Supabase דרך ה-Integration של Vercel הן כבר קיימות):
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `ANTHROPIC_API_KEY` (אופציונלי, לספירת צ'יפים מתמונה)
+3. Deploy.
+4. Settings → Domains → `pokertable.realizeaisolution.com`. Vercel יציג רשומת DNS אחת (CNAME ל-`cname.vercel-dns.com`). מוסיפים אותה ב-Cloudflare DNS של realizeaisolution.com עם **DNS only** (ענן אפור).
 
-### איפה שמים
-GitHub → הריפו → Settings → Secrets and variables → Actions → **New repository secret**, לכל אחד מהשמות למעלה.
-אחר כך: Actions → Deploy → Run workflow (או כל push ל-`main`).
+### בדיקה
+- `https://pokertable.realizeaisolution.com/api/version`
+- כניסה עם Google, יצירת שולחן, פתיחת ערב.
 
-## מה הזרימה עושה
+## חלופה: Cloudflare Workers
 
-1. lint + בדיקות. אם משהו נכשל, לא עולה כלום.
-2. `supabase db push`: מריץ מיגרציות חדשות מ-`supabase/migrations`.
-3. מגדיר ב-Supabase: Site URL, כתובות חזרה, והתחברות Google.
-4. בונה (OpenNext) ומעלה ל-Cloudflare. הדומיין מוגדר ב-`wrangler.jsonc` ו-Cloudflare יוצר DNS ותעודה לבד.
-5. בודק ש-`/api/version` עונה.
-
-## הרצה מקומית מול Cloudflare
-
-```bash
-cp .env.example .env.local   # ולמלא
-npm run preview
-```
+הפרויקט נבנה גם ל-Cloudflare (`wrangler.jsonc`, `npm run deploy`, ו-`.github/workflows/deploy.yml` שרץ ידנית).
