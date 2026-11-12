@@ -6,6 +6,15 @@ export type Release = { version: string; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.14.2",
+    date: "2026-11-12",
+    title: "סיום ערב קל למצוא",
+    items: [
+      "כפתור הדגל בתחתית מסך הערב נקרא עכשיו \"סיום ערב\"",
+      "ב\"שחקנים וקופאי\": \"הסרה מהערב\" (רק למי שלא קיבל צ'יפים, נשאר חבר בשולחן) לעומת \"יציאה ופדיון\" עם ספירה וסגירת חוב",
+    ],
+  },
+  {
     version: "1.14.1",
     date: "2026-11-12",
     title: "אייקון להתראות",

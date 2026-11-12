@@ -262,7 +262,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
             )}
             {t.isAdmin && (
               <Button size="lg" variant="soft" onClick={() => setSheet("close")} aria-label="סגירת ערב">
-                <Flag className="size-5" />
+                <Flag className="size-5" /> סיום ערב
               </Button>
             )}
           </div>

@@ -750,6 +750,7 @@ export function AdminSheet({
 
         <section>
           <h3 className="mb-2 text-sm font-bold text-muted">שחקנים בערב</h3>
+          <p className="mb-2 text-xs text-muted">מי שכבר קיבל צ&apos;יפים יוצא ב&quot;יציאה ופדיון&quot;: סופרים לו את הצ&apos;יפים וסוגרים חוב. &quot;הסרה מהערב&quot; רק למי שלא קיבל כלום, והוא נשאר חבר בשולחן.</p>
           <div className="space-y-2">
             {playing.map((p) => {
               const m = members.find((x) => x.id === p.member_id);
@@ -765,7 +766,7 @@ export function AdminSheet({
                   ) : (
                     <Button size="sm" variant="soft" loading={busy === `remove:${p.member_id}`} disabled={!!busy} onClick={() => remove(p)}>
                       {bought(p.member_id) ? <LogOut className="size-4" /> : <Trash2 className="size-4" />}
-                      {bought(p.member_id) ? "יציאה ופדיון" : "הסרה"}
+                      {bought(p.member_id) ? "יציאה ופדיון" : "הסרה מהערב"}
                     </Button>
                   )}
                 </div>
