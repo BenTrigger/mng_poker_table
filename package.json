@@ -8,9 +8,6 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "cf-build": "opennextjs-cloudflare build",
     "test:db": "./scripts/test-db.sh",
     "test:e2e": "playwright test",
     "test:e2e:live": "BASE_URL=https://pokertable-rho.vercel.app playwright test",
@@ -30,7 +27,6 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@opennextjs/cloudflare": "^1.20.17",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
@@ -41,7 +37,6 @@
     "eslint-config-next": "15.5.29",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^3.2.7",
-    "wrangler": "^4.160.1"
+    "vitest": "^3.2.7"
   }
 }

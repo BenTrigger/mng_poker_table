@@ -5,7 +5,6 @@ import pkg from "./package.json";
 // version is live and offer to refresh.
 const build =
   process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ||
-  process.env.WORKERS_CI_COMMIT_SHA?.slice(0, 7) ||
   process.env.GITHUB_SHA?.slice(0, 7) ||
   new Date().toISOString().replace(/[-:T]/g, "").slice(0, 12);
 
