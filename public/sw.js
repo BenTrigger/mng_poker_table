@@ -35,3 +35,57 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(fetch(e.request).catch(() => caches.match(e.request).then((r) => r || caches.match("/tables"))));
   }
 });
+
+// ---------------------------------------------------------------------------
+// Push notifications (game starting, details changed, a seat opened...)
+// ---------------------------------------------------------------------------
+self.addEventListener("push", (e) => {
+  let msg = {};
+  try {
+    msg = e.data ? e.data.json() : {};
+  } catch {
+    msg = { title: "All In", body: e.data ? e.data.text() : "" };
+  }
+  const url = msg.url || "/notifications";
+  e.waitUntil(
+    (async () => {
+      await self.registration.showNotification(msg.title || "All In", {
+        body: msg.body || "",
+        icon: "/icons/icon-192.png",
+        badge: "/icons/icon-192.png",
+        tag: msg.tag,
+        dir: "rtl",
+        lang: "he",
+        data: { url, id: msg.id },
+      });
+      // a dot / number on the app icon where the phone supports it
+      try {
+        const shown = await self.registration.getNotifications();
+        if (self.navigator.setAppBadge) await self.navigator.setAppBadge(shown.length || 1);
+      } catch {}
+    })(),
+  );
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const d = e.notification.data || {};
+  let target = d.url || "/notifications";
+  if (d.id) target += (target.includes("?") ? "&" : "?") + "n=" + d.id; // marks it read on arrival
+  e.waitUntil(
+    (async () => {
+      const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const w of wins) {
+        if (new URL(w.url).origin === self.location.origin && "focus" in w) {
+          await w.focus();
+          if ("navigate" in w) return w.navigate(target);
+          return;
+        }
+      }
+      return self.clients.openWindow(target);
+    })(),
+  );
+});
+
+// the browser renewed the subscription: the next app start saves the new one
+self.addEventListener("pushsubscriptionchange", () => {});

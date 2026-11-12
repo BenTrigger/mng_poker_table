@@ -9,6 +9,7 @@ import { TopBar } from "@/components/top-bar";
 import { Button, Card, Empty, Field, Sheet, Spinner, Badge, inputCls } from "@/components/ui";
 import type { Member, PokerTable } from "@/lib/types";
 import { VersionLabel } from "@/components/version-label";
+import { PushCard } from "@/components/push-card";
 
 type Row = Member & { poker_tables: PokerTable };
 
@@ -82,6 +83,8 @@ export default function TablesPage() {
             <LogIn className="size-5" /> הצטרפות בקוד
           </Button>
         </div>
+
+        {rows.length > 0 && <PushCard compact />}
 
         {rows.length === 0 ? (
           <Empty icon={<Spade className="size-7" />} title="עוד אין לך שולחנות" text="פתח שולחן חדש לחבר'ה, או הצטרף לשולחן קיים עם הקוד שלו." />

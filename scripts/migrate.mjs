@@ -88,6 +88,20 @@ try {
     }
   }
   if (pending.length) log(`applied ${pending.length} migration(s)`);
+
+  // Where the database pings the app to send phone push (see the
+  // notifications migration). Production builds only, never local/CI runs.
+  const prodHost = onVercel && process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  const dispatchUrl = process.env.PUSH_DISPATCH_URL || (prodHost ? `https://${prodHost}/api/push/dispatch` : null);
+  const { rows: cfg } = await client.query("select to_regclass('app_meta.config') is not null as ok");
+  if (dispatchUrl && cfg[0].ok) {
+    await client.query(
+      `insert into app_meta.config (key, value) values ('push_dispatch_url', $1)
+       on conflict (key) do update set value = excluded.value`,
+      [dispatchUrl],
+    );
+    log(`push dispatch -> ${dispatchUrl}`);
+  }
 } catch (e) {
   console.error(`[migrate] FAILED: ${e.message}`);
   process.exitCode = 1;
