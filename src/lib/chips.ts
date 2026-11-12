@@ -1,4 +1,4 @@
-import type { Chip, ChipCount } from "./types";
+import type { Chip, ChipCount, ChipSet } from "./types";
 import { blobToBase64 } from "./image";
 
 export const DEFAULT_CHIPS: Chip[] = [
@@ -9,11 +9,11 @@ export const DEFAULT_CHIPS: Chip[] = [
   { color: "סגול", hex: "#7b2cbf", value: 500 },
 ];
 
-export async function countChipsFromPhoto(photo: Blob, chips: Chip[], expected?: number): Promise<ChipCount> {
+export async function countChipsFromPhoto(photo: Blob, chipSet: Pick<ChipSet, "chips" | "table_id">, expected?: number): Promise<ChipCount> {
   const res = await fetch("/api/count-chips", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ image: await blobToBase64(photo), mediaType: "image/jpeg", chips, expected }),
+    body: JSON.stringify({ image: await blobToBase64(photo), mediaType: "image/jpeg", chips: chipSet.chips, expected, tableId: chipSet.table_id }),
   });
   if (!res.ok) {
     const j = await res.json().catch(() => ({}));
