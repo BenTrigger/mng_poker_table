@@ -40,6 +40,26 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
     setInit(true);
   }, [t.table, t.members, t.chipSets, init]);
 
+  // opened from an early sign-up: the seated players play, in their seat order
+  const [signupId, setSignupId] = useState<string | null>(null);
+  useEffect(() => {
+    const id = new URLSearchParams(location.search).get("signup");
+    if (!id || !init) return;
+    supabase()
+      .from("signup_seats")
+      .select("member_id, seat")
+      .eq("signup_id", id)
+      .not("seat", "is", null)
+      .order("seat")
+      .then(({ data }) => {
+        if (!data?.length) return;
+        setSignupId(id);
+        const ids = data.map((r) => r.member_id as string);
+        setSelected(ids);
+        setCashier((c) => (ids.includes(c) ? c : ""));
+      });
+  }, [init]);
+
   if (loading || t.loading || !t.table) return <Spinner />;
   if (!t.isAdmin) {
     router.replace(`/t/${code}`);
@@ -93,6 +113,7 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
       .from("poker_tables")
       .update({ last_settings: { chip_set_id: chipSetId, chips_per_buyin: chipsPer, money_per_buyin: moneyPer, cashier_member_id: cashier, member_ids: selected } })
       .eq("id", t.table!.id);
+    if (signupId) await sb.from("signups").update({ status: "started", night_id: night.id }).eq("id", signupId);
     await logEvent(night.id, "night_opened", { players: selected.length, chips_per_buyin: chipsPer, money_per_buyin: moneyPer, cashier });
     router.replace(`/t/${code}/n/${night.id}`);
   }
@@ -103,6 +124,11 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
     <>
       <TopBar title="ערב חדש" sub={t.table.name} back={`/t/${code}`} />
       <main className="mx-auto max-w-lg space-y-5 p-4 pb-32">
+        {signupId && (
+          <Card className="border-gold/40 bg-gold/5 text-sm">
+            השחקנים והמקומות נטענו מההרשמה המוקדמת ({selected.length} רשומים). אפשר לשנות לפני הפתיחה.
+          </Card>
+        )}
         <section>
           <h2 className="mb-2 px-1 text-sm font-bold text-muted">ערכת צ'יפים</h2>
           <div className="space-y-2">

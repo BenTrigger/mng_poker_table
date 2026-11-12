@@ -131,3 +131,33 @@ export type CashierHandover = {
   created_by: string | null;
   created_at: string;
 };
+
+export type Signup = {
+  id: string;
+  table_id: string;
+  starts_at: string;
+  location: string | null;
+  note: string | null;
+  seats: number;
+  status: "open" | "closed" | "started" | "cancelled";
+  night_id: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+/** A seat (or waiting-list spot when seat is null) as returned by get_signup() */
+export type SignupSeat = {
+  member_id: string;
+  seat: number | null;
+  created_at: string;
+  display_name: string;
+  avatar_url: string | null;
+  user_id: string | null;
+};
+
+export type SignupView = {
+  signup: Signup;
+  table: { id: string; name: string; code: string };
+  me: { id: string; status: Member["status"]; role: Member["role"] } | null;
+  seats: SignupSeat[];
+};

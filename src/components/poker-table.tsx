@@ -1,6 +1,6 @@
 "use client";
 import { Avatar } from "./ui";
-import { Landmark } from "lucide-react";
+import { Landmark, Plus } from "lucide-react";
 
 export type Seat = {
   id: string;
@@ -13,6 +13,7 @@ export type Seat = {
   isMe?: boolean;
   pending?: boolean;
   out?: boolean;
+  empty?: boolean; // free seat (early sign-up)
 };
 
 /**
@@ -46,12 +47,18 @@ export function PokerTable({ seats, center, onSeat }: { seats: Seat[]; center: R
             style={{ left: `${x}%`, top: `${y}%` }}
           >
             <div className="relative">
-              <Avatar
-                name={s.name}
-                src={s.avatar}
-                size={46}
-                ring={`ring-2 ${s.isMe ? "ring-gold" : "ring-black/60"} ${s.pending ? "pulse-ring" : ""}`}
-              />
+              {s.empty ? (
+                <div className="grid size-[46px] place-items-center rounded-full border-2 border-dashed border-gold/50 bg-black/30 text-gold">
+                  <Plus className="size-5" />
+                </div>
+              ) : (
+                <Avatar
+                  name={s.name}
+                  src={s.avatar}
+                  size={46}
+                  ring={`ring-2 ${s.isMe ? "ring-gold" : "ring-black/60"} ${s.pending ? "pulse-ring" : ""}`}
+                />
+              )}
               {s.isCashier && (
                 <span className="absolute -bottom-1 -left-1 grid size-5 place-items-center rounded-full bg-gold text-[#1d1405] ring-2 ring-bg" title="קופאי">
                   <Landmark className="size-3" />
