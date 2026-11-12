@@ -85,7 +85,8 @@ export function useTable(code: string, userId: string | undefined) {
       .channel(`table-${tableId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "table_members", filter: `table_id=eq.${tableId}` }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "game_nights", filter: `table_id=eq.${tableId}` }, load)
-      .subscribe();
+      // changes made before the channel was ready are not replayed: reload once it is
+      .subscribe((status) => status === "SUBSCRIBED" && load());
     return () => {
       sb.removeChannel(ch);
     };
@@ -140,7 +141,7 @@ export function useNight(nightId: string, enabled: boolean) {
       .on("postgres_changes", { event: "*", schema: "public", table: "night_events", filter: f }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "settlements", filter: f }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "cashier_handovers", filter: f }, load)
-      .subscribe();
+      .subscribe((status) => status === "SUBSCRIBED" && load());
     // refresh when the app comes back to the foreground (phones suspend sockets)
     const vis = () => document.visibilityState === "visible" && load();
     document.addEventListener("visibilitychange", vis);

@@ -57,7 +57,8 @@ test("a full game night with six players", async ({ browser, baseURL }) => {
       await expect(pl.page.getByText("הבקשה נשלחה")).toBeVisible();
     }
     // the admin sees the requests arrive live
-    await expect(p.getByText("מבקשים להצטרף (4)")).toBeVisible();
+    // (the first realtime subscription on a fresh stack can take a while)
+    await expect(p.getByText("מבקשים להצטרף (4)")).toBeVisible({ timeout: 30_000 });
     for (let i = 4; i > 0; i--) {
       await btn(p, "אישור").first().click();
       await expect(p.getByText(i > 1 ? `מבקשים להצטרף (${i - 1})` : "מבקשים להצטרף")).toHaveCount(i > 1 ? 1 : 0);
