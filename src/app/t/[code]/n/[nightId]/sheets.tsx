@@ -552,8 +552,10 @@ export function AdminSheet({
     await logEvent(night.id, "cashier_changed", { member_id: id });
     onClose();
   }
+  const seated = players.filter((p) => p.status === "playing").length;
   async function addPlayer(id: string) {
-    await supabase().from("night_players").insert({ night_id: night.id, member_id: id, seat: players.length });
+    const { error } = await supabase().from("night_players").insert({ night_id: night.id, member_id: id, seat: players.length });
+    if (error) return alert(error.message.includes("table is full") ? "השולחן מלא (עד 10 שחקנים)." : error.message);
     await logEvent(night.id, "player_added", { member_id: id });
   }
 
@@ -582,7 +584,8 @@ export function AdminSheet({
           </div>
           )}
         </section>
-        {outside.length > 0 && (
+        {outside.length > 0 && seated >= 10 && <p className="text-sm text-muted">השולחן מלא (10 שחקנים). שחקן חדש נכנס כשמישהו קם.</p>}
+        {outside.length > 0 && seated < 10 && (
           <section>
             <h3 className="mb-2 text-sm font-bold text-muted">הוספת שחקן לערב</h3>
             <div className="space-y-2">
