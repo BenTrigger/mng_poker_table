@@ -6,6 +6,15 @@ export type Release = { version: string; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.4.1",
+    date: "2026-11-12",
+    title: "תיקון התקנת האפליקציה",
+    items: [
+      "ההדרכה להתקנה נפתחת עכשיו על כל המסך (קודם נחתכה בתוך פס התפריט)",
+      "אותו תיקון לכל החלונות שנפתחים מתוך פסים בתחתית המסך",
+    ],
+  },
+  {
     version: "1.4.0",
     date: "2026-11-12",
     title: "טורנירים 🏆",

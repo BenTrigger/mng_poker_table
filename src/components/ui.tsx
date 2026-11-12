@@ -1,4 +1,5 @@
 "use client";
+import { createPortal } from "react-dom";
 import { useEffect } from "react";
 import { X, Loader2 } from "lucide-react";
 
@@ -59,8 +60,11 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   }, [open, onClose]);
-  if (!open) return null;
-  return (
+  if (!open || typeof document === "undefined") return null;
+  // Rendered into <body> so a sheet opened from inside a blurred (backdrop-filter)
+  // bar still covers the whole screen: such a bar would otherwise become the
+  // containing block of the fixed overlay and squeeze it into the bar.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={onClose}>
       <div
         className="sheet-up max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-[28px] border-t border-line bg-surface p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
@@ -75,7 +79,8 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
