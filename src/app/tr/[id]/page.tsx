@@ -7,7 +7,7 @@ import {
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/hooks";
 import { useTournament, useNow } from "@/lib/tournament-hooks";
-import { clockState, prizePool, tournamentError, tournamentInviteText } from "@/lib/tournament";
+import { clockState, prizePool, rebuyLabel, tournamentError, tournamentInviteText } from "@/lib/tournament";
 import { signupDate, signupTime, whatsappUrl } from "@/lib/signup";
 import { formatMoney } from "@/lib/calc";
 import { TopBar } from "@/components/top-bar";
@@ -121,11 +121,12 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
             <Badge>
               <Layers className="size-3" /> {Number(t.starting_stack).toLocaleString()} צ'יפים
             </Badge>
-            {t.rebuy_until_level > 0 && (
+            {rebuyLabel(t) && (
               <Badge>
-                <Repeat className="size-3" /> ריביי עד שלב {t.rebuy_until_level}
+                <Repeat className="size-3" /> {rebuyLabel(t)}
               </Badge>
             )}
+            <Badge>{t.payment_mode === "upfront" ? "מזומן בכניסה" : "התחשבנות בסוף"}</Badge>
             {t.addon_price != null && <Badge>אד-און {formatMoney(Number(t.addon_price))}</Badge>}
             {t.late_reg_until_level > 0 && <Badge>הרשמה מאוחרת עד שלב {t.late_reg_until_level}</Badge>}
           </div>

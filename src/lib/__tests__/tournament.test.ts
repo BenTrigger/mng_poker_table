@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   anchorFor, balanceMoves, blindStructure, chipsInPlay, clockState, entryCost, niceRound, payoutPercents, prizePool, prizes, results,
-  standings, togglePause, tournamentInviteText, tournamentStats,
+  standings, togglePause, tournamentInviteText, tournamentStats, rebuyOpenAt, rebuyLabel, rebuyDeadline, upfrontPayouts,
 } from "../tournament";
 import type { Tournament, TournamentEntry } from "../types";
 
 const levels = blindStructure(10000, 20);
 const T: Tournament = {
   id: "t1", table_id: "tb", name: "טורניר חמישי", starts_at: "2026-11-20T18:00:00.000Z", location: null, address: null, note: null,
-  table_count: 2, seats_per_table: 9, buy_in: 100, starting_stack: 10000, rebuy_until_level: 4, rebuy_price: null, rebuy_chips: null,
+  table_count: 2, seats_per_table: 9, buy_in: 100, starting_stack: 10000, rebuy_until_level: 4, rebuy_until_time: null, payment_mode: "end", rebuy_price: null, rebuy_chips: null,
   addon_price: 50, addon_chips: 5000, late_reg_until_level: 4, levels, registration_open: true, status: "running",
   clock_anchor: "2026-11-20T18:00:00.000Z", paused_at: null, started_at: null, finished_at: null, created_by: null, created_at: "",
 };
@@ -147,5 +147,30 @@ describe("sharing and stats", () => {
     const a = s.find((x) => x.member_id === "a")!;
     expect(a).toMatchObject({ played: 2, wins: 1, cashes: 1, best: 1, net: 100, avgPlace: 1.5 });
     expect(s.find((x) => x.member_id === "b")!.net).toBe(-100);
+  });
+});
+
+describe("rebuy period and payment", () => {
+  it("rebuys by level", () => {
+    expect(rebuyOpenAt(T, 4, at(0))).toBe(true);
+    expect(rebuyOpenAt(T, 5, at(0))).toBe(false);
+    expect(rebuyOpenAt({ ...T, rebuy_until_level: 0 }, 1, at(0))).toBe(false);
+    expect(rebuyLabel(T)).toBe("ריביי עד סוף שלב 4 (100/200)");
+  });
+  it("rebuys by clock time, ignoring levels", () => {
+    const t = { ...T, rebuy_until_level: 0, rebuy_until_time: new Date(at(90)).toISOString() };
+    expect(rebuyOpenAt(t, 9, at(89))).toBe(true);
+    expect(rebuyOpenAt(t, 1, at(91))).toBe(false);
+    expect(rebuyLabel(t)).toContain("ריביי עד השעה");
+  });
+  it("a deadline earlier than the start is the next day", () => {
+    const start = new Date(2026, 10, 20, 21, 0);
+    expect(rebuyDeadline(start, "23:30").getDate()).toBe(20);
+    expect(rebuyDeadline(start, "00:30").getDate()).toBe(21);
+  });
+  it("cash at the door: the organizer pays out the prizes", () => {
+    expect(upfrontPayouts([{ member_id: "a", prize: 600 }, { member_id: "org", prize: 300 }, { member_id: "c", prize: 0 }], "org")).toEqual([
+      { from: "org", to: "a", amount: 600 },
+    ]);
   });
 });

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, MapPin, Trophy, Users, Plus, Minus, Hourglass } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useTableTournaments, type TournamentRow } from "@/lib/tournament-hooks";
-import { SPEEDS, blindStructure, type Speed, type TournamentForm } from "@/lib/tournament";
+import { SPEEDS, blindStructure, rebuyDeadline, type Speed, type TournamentForm } from "@/lib/tournament";
 export type { TournamentForm };
 import { signupDate, signupTime } from "@/lib/signup";
 import { formatMoney } from "@/lib/calc";
@@ -121,7 +121,10 @@ export const DEFAULT_FORM: TournamentForm = {
   buyIn: 100,
   stack: 10000,
   speed: "regular",
+  rebuyBy: "level",
   rebuyLevels: 4,
+  rebuyTime: "22:30",
+  payment: "end",
   addon: false,
   lateReg: 4,
 };
@@ -140,7 +143,12 @@ export function formFromTournament(t: Tournament): TournamentForm {
     buyIn: Number(t.buy_in),
     stack: t.starting_stack,
     speed,
-    rebuyLevels: t.rebuy_until_level,
+    rebuyBy: t.rebuy_until_time ? "time" : t.rebuy_until_level > 0 ? "level" : "none",
+    rebuyLevels: t.rebuy_until_level || 4,
+    rebuyTime: t.rebuy_until_time
+      ? new Date(t.rebuy_until_time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+      : DEFAULT_FORM.rebuyTime,
+    payment: t.payment_mode,
     addon: t.addon_price != null,
     lateReg: t.late_reg_until_level,
   };
@@ -158,7 +166,9 @@ export function tournamentFields(f: TournamentForm) {
     seats_per_table: f.seats,
     buy_in: f.buyIn,
     starting_stack: f.stack,
-    rebuy_until_level: f.rebuyLevels,
+    rebuy_until_level: f.rebuyBy === "level" ? f.rebuyLevels : 0,
+    rebuy_until_time: f.rebuyBy === "time" ? rebuyDeadline(new Date(f.startsAt), f.rebuyTime).toISOString() : null,
+    payment_mode: f.payment,
     rebuy_price: null,
     rebuy_chips: null,
     // add-on at the first break: same price as the buy-in for a full starting stack
@@ -209,7 +219,7 @@ export function TournamentFormView({
 }: { tableId: string; initial?: Partial<TournamentForm>; existing?: Tournament; onSaved?: () => void }) {
   const router = useRouter();
   const [f, setF] = useState<TournamentForm>(() =>
-    existing ? formFromTournament(existing) : { ...DEFAULT_FORM, ...initial, startsAt: defaultStart(), location: "", address: "", note: "" },
+    existing ? formFromTournament(existing) : { ...DEFAULT_FORM, ...initial, ...(initial && !initial.rebuyBy && initial.rebuyLevels === 0 ? { rebuyBy: "none" as const, rebuyLevels: 4 } : {}), startsAt: defaultStart(), location: "", address: "", note: "" },
   );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -243,10 +253,10 @@ export function TournamentFormView({
     }
     // remember the format for next time (merged into the table's last settings)
     const { data: t } = await sb.from("poker_tables").select("last_settings").eq("id", tableId).single();
-    const { name, tables, seats, buyIn, stack, speed, rebuyLevels, addon, lateReg } = f;
+    const { name, tables, seats, buyIn, stack, speed, rebuyBy, rebuyLevels, rebuyTime, payment, addon, lateReg } = f;
     await sb
       .from("poker_tables")
-      .update({ last_settings: { ...(t?.last_settings ?? {}), tournament: { name, tables, seats, buyIn, stack, speed, rebuyLevels, addon, lateReg } } })
+      .update({ last_settings: { ...(t?.last_settings ?? {}), tournament: { name, tables, seats, buyIn, stack, speed, rebuyBy, rebuyLevels, rebuyTime, payment, addon, lateReg } } })
       .eq("id", tableId);
     router.push(`/tr/${data.id}`);
   }
@@ -283,6 +293,22 @@ export function TournamentFormView({
         </Field>
       </div>
 
+      <Field label="תשלום">
+        <Pills
+          value={f.payment}
+          options={[
+            { v: "upfront", label: "מזומן בכניסה" },
+            { v: "end", label: "התחשבנות בסוף" },
+          ]}
+          onChange={(v) => set("payment", v)}
+        />
+      </Field>
+      <p className="-mt-2 text-xs text-muted">
+        {f.payment === "upfront"
+          ? "כל אחד משלם למארגן כשהוא נכנס (וגם על ריביי ואד-און). בסוף המארגן משלם את הפרסים."
+          : "אף אחד לא משלם בזמן המשחק. בסוף האפליקציה מחשבת מי מעביר למי."}
+      </p>
+
       <Field label="קצב עליית בליינדים">
         <Pills
           value={f.speed}
@@ -298,16 +324,35 @@ export function TournamentFormView({
 
       <Field label="ריביי (קנייה חוזרת למי שנגמרו לו הצ'יפים)">
         <Pills
-          value={f.rebuyLevels}
+          value={f.rebuyBy}
           options={[
-            { v: 0, label: "בלי" },
-            { v: 2, label: "עד שלב 2" },
-            { v: 4, label: "עד שלב 4" },
-            { v: 6, label: "עד שלב 6" },
+            { v: "none", label: "בלי ריביי" },
+            { v: "level", label: "עד שלב בליינדים" },
+            { v: "time", label: "עד שעה" },
           ]}
-          onChange={(v) => set("rebuyLevels", v)}
+          onChange={(v) => set("rebuyBy", v)}
         />
       </Field>
+      {f.rebuyBy === "level" && (
+        <div className="-mt-2 flex flex-wrap gap-2">
+          {levels.slice(0, 8).map((l, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => set("rebuyLevels", i + 1)}
+              className={`num rounded-2xl px-3 py-1.5 text-xs font-bold ${f.rebuyLevels === i + 1 ? "bg-gold text-[#1d1405]" : "bg-surface-2 text-muted"}`}
+            >
+              שלב {i + 1} · {l.sb}/{l.bb}
+            </button>
+          ))}
+        </div>
+      )}
+      {f.rebuyBy === "time" && (
+        <div className="-mt-2 flex items-center gap-3">
+          <input type="time" className={`${inputCls} w-36`} value={f.rebuyTime} onChange={(e) => set("rebuyTime", e.target.value)} />
+          <span className="text-xs text-muted">אחרי השעה הזו אין יותר ריביי</span>
+        </div>
+      )}
       <Field label="הרשמה מאוחרת">
         <Pills
           value={f.lateReg}
