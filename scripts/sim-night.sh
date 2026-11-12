@@ -18,6 +18,9 @@ export NEXT_PUBLIC_SUPABASE_ANON_KEY="$ANON_KEY"
 export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
 # chip counting is mocked in the browser; the real API must never be called
 unset ANTHROPIC_API_KEY
+# the build id must be the same for "next build" and "next start", or every
+# phone sees "a new version is available" mid-run (the id falls back to the clock)
+export GITHUB_SHA="${GITHUB_SHA:-simlocal}"
 
 [ "${SKIP_BUILD:-}" = 1 ] || npx next build
 npx playwright test -c playwright.sim.config.ts "$@"

@@ -23,15 +23,13 @@ export async function countChipsFromPhoto(photo: Blob, chipSet: Pick<ChipSet, "i
   return res.json();
 }
 
-let enabledCache: boolean | null = null;
-export async function chipCountingEnabled(): Promise<boolean> {
-  if (enabledCache != null) return enabledCache;
-  try {
-    const r = await fetch("/api/count-chips");
-    enabledCache = (await r.json()).enabled === true;
-  } catch {
-    enabledCache = false;
-  }
+let enabledCache: Promise<boolean> | null = null;
+export function chipCountingEnabled(): Promise<boolean> {
+  // one shared request: a photo taken before the first answer arrives waits for it
+  enabledCache ??= fetch("/api/count-chips")
+    .then((r) => r.json())
+    .then((j) => j.enabled === true)
+    .catch(() => false);
   return enabledCache;
 }
 
