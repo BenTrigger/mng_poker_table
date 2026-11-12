@@ -48,7 +48,7 @@ export default function InstallPage() {
         ) : (
           <div className="space-y-3">
             {canPrompt && (
-              <Button size="lg" className="w-full" onClick={() => promptInstall()}>
+              <Button size="lg" className="w-full" onClick={() => promptInstall().then((r) => r === "accepted" && setInstalled(true))}>
                 <Download className="size-5" /> התקנה בלחיצה
               </Button>
             )}

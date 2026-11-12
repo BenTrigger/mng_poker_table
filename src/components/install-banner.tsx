@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Download, Share, PlusSquare, Smartphone, X, MoreVertical } from "lucide-react";
 import { Sheet, Button } from "./ui";
-import { detectPlatform, getInstallPrompt, isInstalled, promptInstall, subscribeInstall, type Platform } from "@/lib/install-prompt";
+import { detectPlatform, isInstalled, promptInstall, subscribeInstall, type Platform } from "@/lib/install-prompt";
 
 const DISMISS_KEY = "allin:install-dismissed";
 const SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -23,16 +23,15 @@ function snoozed() {
  */
 export function InstallBanner() {
   const [platform, setPlatform] = useState<Platform | null>(null);
-  const [canPrompt, setCanPrompt] = useState(false);
   const [hidden, setHidden] = useState(true);
   const [guide, setGuide] = useState(false);
+  const [trying, setTrying] = useState(false);
 
   useEffect(() => {
     const p = detectPlatform();
     setPlatform(p);
     setHidden(p === "desktop" || isInstalled() || snoozed());
     const sync = () => {
-      setCanPrompt(!!getInstallPrompt());
       if (isInstalled()) setHidden(true);
     };
     sync();
@@ -47,10 +46,14 @@ export function InstallBanner() {
     } catch {}
     setHidden(true);
   };
+  // Android: go straight to the real install; the guide only if that is not possible or is closed.
   const install = async () => {
-    if (platform === "android" && canPrompt) {
-      if (await promptInstall()) setHidden(true);
-    } else setGuide(true);
+    if (platform === "ios") return setGuide(true);
+    setTrying(true);
+    const result = await promptInstall();
+    setTrying(false);
+    if (result === "accepted") setHidden(true);
+    else setGuide(true);
   };
 
   return (
@@ -63,7 +66,7 @@ export function InstallBanner() {
             <div className="text-sm font-bold">התקינו את All In</div>
             <div className="truncate text-xs text-muted">פתיחה מהירה מהמסך הראשי, כמו אפליקציה</div>
           </div>
-          <Button size="sm" onClick={install}>
+          <Button size="sm" onClick={install} loading={trying}>
             {platform === "ios" ? <Share className="size-4" /> : <Download className="size-4" />}
             {platform === "ios" ? "איך מתקינים" : "התקנה"}
           </Button>
@@ -84,9 +87,12 @@ export function InstallBanner() {
           </div>
         ) : (
           <div className="space-y-3">
-            <p className="text-sm text-muted">הדפדפן לא הציע התקנה ישירה. אפשר להתקין ידנית ב-Chrome:</p>
+            <p className="text-sm text-muted">ההתקנה הישירה לא הצליחה. אפשר להתקין ידנית ב-Chrome:</p>
             <Step n={1} icon={<MoreVertical className="size-4" />} text="פותחים את התפריט (שלוש נקודות למעלה)" />
-            <Step n={2} icon={<Download className="size-4" />} text='בוחרים "התקנת אפליקציה" או "הוספה למסך הבית"' />
+            <Step n={2} icon={<Download className="size-4" />} text='בוחרים "התקנת אפליקציה" או "הוספה למסך הבית" ואז "התקנה"' />
+            <p className="pt-1 text-xs text-muted">
+              אם כתוב שאי אפשר להתקין: בתפריט של Chrome מורידים את הסימון מ&quot;אתר למחשב&quot;, סוגרים את הלשונית ופותחים את האתר מחדש. פתחתם מתוך וואטסאפ? בוחרים קודם &quot;פתח ב-Chrome&quot;.
+            </p>
           </div>
         )}
         <Button className="mt-5 w-full" variant="soft" onClick={() => setGuide(false)}>

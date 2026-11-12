@@ -4,7 +4,7 @@
 // handover and the end-of-night settlement. Chip recognition is mocked so
 // each photo "sees" exactly what the scenario says.
 import { expect, test } from "@playwright/test";
-import { btn, db, newPlayer, photograph, sheet, simConfigured, Vision, type Player } from "./sim";
+import { btn, db, newPlayer, photograph, sheet, simConfigured, Vision, warmRealtime, type Player } from "./sim";
 
 test.skip(!simConfigured, "needs a local Supabase (supabase start), see e2e-sim/README.md");
 
@@ -29,6 +29,7 @@ async function nightState(nightId: string) {
 
 test("a full game night with six players", async ({ browser, baseURL }) => {
   test.setTimeout(6 * 60_000);
+  await warmRealtime();
   const vision = new Vision();
   const join = (name: string) => newPlayer(browser, baseURL!, vision, name);
 

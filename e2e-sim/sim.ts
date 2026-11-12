@@ -126,3 +126,37 @@ export async function photograph(page: Page, expectedTotal: number) {
 
 export const btn = (scope: Page | ReturnType<typeof sheet>, name: string | RegExp) =>
   scope.getByRole("button", { name, exact: typeof name === "string" ? false : undefined });
+
+/**
+ * A fresh local stack (as in CI) can take a while before realtime delivers its
+ * first database change. Wait until it does, so the scenario measures the app
+ * and not the stack warming up.
+ */
+export async function warmRealtime(timeoutMs = 120_000) {
+  const email = `warmup-${runId}@sim.test`;
+  await db().auth.admin.createUser({ email, password: PASSWORD, email_confirm: true, user_metadata: { full_name: "warmup" } });
+  const sb = createClient(SB_URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { error } = await sb.auth.signInWithPassword({ email, password: PASSWORD });
+  if (error) throw error;
+  const { data: table, error: e2 } = await sb.rpc("create_table", { p_name: "warmup" });
+  if (e2) throw e2;
+  const started = Date.now();
+  let got = false;
+  const statuses: string[] = [];
+  const ch = sb
+    .channel(`warmup-${runId}`)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "table_members", filter: `table_id=eq.${table.id}` }, () => {
+      got = true;
+    })
+    .subscribe((status, err) => statuses.push(`${status}${err ? `: ${err.message}` : ""} @${Date.now() - started}ms`));
+  try {
+    while (!got) {
+      if (Date.now() - started > timeoutMs) throw new Error(`realtime never delivered a change (${statuses.join(", ")})`);
+      await db().from("table_members").insert({ table_id: table.id, display_name: "ping" });
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    console.log(`realtime ready after ${Date.now() - started}ms (${statuses.join(", ")})`);
+  } finally {
+    await sb.removeChannel(ch);
+  }
+}

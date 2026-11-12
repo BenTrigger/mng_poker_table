@@ -22,6 +22,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="he" dir="rtl">
       <head>
+        {/* catch the one-time install prompt before the app bundle loads */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: "window.__bip=null;addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__bip=e;});",
+          }}
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
