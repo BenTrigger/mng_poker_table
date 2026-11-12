@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Check, X, AlertTriangle, Pencil, Share2, Landmark, UserPlus, LogOut, ImageIcon, Sparkles, Trash2, ArrowLeftRight } from "lucide-react";
+import { Camera, Check, X, AlertTriangle, Pencil, Share2, Landmark, UserPlus, LogOut, ImageIcon, Sparkles, Trash2, ArrowLeftRight, HandCoins } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { verdictOf } from "@/lib/verdict";
 import { addGuest as addGuestByName } from "@/lib/guests";
@@ -57,15 +57,18 @@ export function PhotoThumb({ path }: { path: string | null }) {
 // Player asks the cashier for chips (by chips or by money)
 // ---------------------------------------------------------------------------
 export function RequestSheet({
-  open, onClose, night, me, canManage, players, members, chipSet,
+  open, onClose, night, me, canManage, players, members, chipSet, initialFor,
 }: {
   open: boolean; onClose: () => void; night: GameNight; me: Member; canManage: boolean; players: NightPlayer[]; members: Member[]; chipSet: ChipSet | null;
+  /** admin/cashier tapped a player: the request is for them */
+  initialFor?: string | null;
 }) {
   const rate = chipRate(night);
   const playing = players.filter((p) => p.status === "playing");
   const [mode, setMode] = useState<"chips" | "money">("chips");
   const [value, setValue] = useState<number>(Number(night.chips_per_buyin));
-  const [forId, setForId] = useState(me.id);
+  // who the request is for; the admin and the cashier can pick several players at once
+  const [forIds, setForIds] = useState<string[]>([me.id]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -73,7 +76,13 @@ export function RequestSheet({
     if (open) {
       setMode("chips");
       setValue(Number(night.chips_per_buyin));
-      setForId(playing.some((p) => p.member_id === me.id) ? me.id : playing[0]?.member_id ?? me.id);
+      const first =
+        initialFor && playing.some((p) => p.member_id === initialFor)
+          ? initialFor
+          : playing.some((p) => p.member_id === me.id)
+            ? me.id
+            : playing[0]?.member_id ?? me.id;
+      setForIds([first]);
       setErr(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -86,17 +95,28 @@ export function RequestSheet({
   async function send() {
     setBusy(true);
     setErr(null);
-    const { data, error } = await supabase()
-      .from("chip_requests")
-      .insert({ night_id: night.id, member_id: forId, requested_by: await myUid(), mode, chips })
-      .select()
-      .single();
-    if (error) {
-      setBusy(false);
-      return setErr(nightError(error));
+    const uid = await myUid();
+    const failed: string[] = [];
+    let lastErr: string | null = null;
+    for (const forId of forIds) {
+      const { data, error } = await supabase()
+        .from("chip_requests")
+        .insert({ night_id: night.id, member_id: forId, requested_by: uid, mode, chips })
+        .select()
+        .single();
+      if (error) {
+        failed.push(forId);
+        lastErr = nightError(error);
+        continue;
+      }
+      await logEvent(night.id, "request", { member_id: forId, chips, money, request_id: data?.id, on_behalf: forId !== me.id });
     }
-    await logEvent(night.id, "request", { member_id: forId, chips, money, request_id: data?.id });
     setBusy(false);
+    if (failed.length) {
+      // keep only the ones that did not go through, so a retry does not double the others
+      setForIds(failed);
+      return setErr(forIds.length > 1 ? `לא נשלח עבור ${failed.map((id) => nameOf(members, id)).join(", ")}: ${lastErr}` : lastErr);
+    }
     onClose();
   }
 
@@ -104,14 +124,25 @@ export function RequestSheet({
     <Sheet open={open} onClose={onClose} title="בקשת צ'יפים">
       <div className="space-y-4">
         {canManage && playing.length > 1 && (
-          <Field label="עבור">
-            <select className={inputCls} value={forId} onChange={(e) => setForId(e.target.value)}>
-              {playing.map((p) => (
-                <option key={p.member_id} value={p.member_id}>
-                  {nameOf(members, p.member_id)}
-                </option>
-              ))}
-            </select>
+          <Field label={forIds.length > 1 ? `עבור ${forIds.length} שחקנים (אותה כמות לכל אחד)` : "עבור (אפשר לסמן כמה)"}>
+            <div className="flex flex-wrap gap-2">
+              {playing.map((p) => {
+                const on = forIds.includes(p.member_id);
+                return (
+                  <button
+                    key={p.member_id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setForIds((ids) => (on ? (ids.length > 1 ? ids.filter((x) => x !== p.member_id) : ids) : [...ids, p.member_id]))}
+                    className={`flex items-center gap-1 rounded-xl px-3 py-2 text-sm font-bold ${on ? "bg-gold text-[#1d1405]" : "bg-surface-2 text-muted"}`}
+                  >
+                    {on && <Check className="size-3.5" />}
+                    {nameOf(members, p.member_id)}
+                    {p.member_id === me.id && " (אני)"}
+                  </button>
+                );
+              })}
+            </div>
           </Field>
         )}
         <div className="grid grid-cols-2 rounded-2xl bg-surface-2 p-1">
@@ -540,9 +571,11 @@ export function CashierSheet({
 // One player's details: purchases with photos, cash out
 // ---------------------------------------------------------------------------
 export function PlayerSheet({
-  onClose, night, memberId, players, requests, members, lines, chipSet, canManage,
+  onClose, night, memberId, players, requests, members, lines, chipSet, canManage, onRequest,
 }: {
   onClose: () => void; night: GameNight; memberId: string; players: NightPlayer[]; requests: ChipRequest[]; members: Member[]; lines: PlayerLine[]; chipSet: ChipSet | null; canManage: boolean;
+  /** admin/cashier: open a chip request for this player (guests and anyone not using the app) */
+  onRequest?: () => void;
 }) {
   const rate = chipRate(night);
   const p = players.find((x) => x.member_id === memberId);
@@ -623,6 +656,11 @@ export function PlayerSheet({
             <div className="flex items-center gap-3 text-sm text-muted">
               <PhotoThumb path={p.final_photo_path} /> צילום ספירת הסיום ({Number(p.final_chips).toLocaleString()} צ'יפים)
             </div>
+          )}
+          {canManage && !closed && p.status === "playing" && onRequest && (
+            <Button className="w-full" onClick={onRequest}>
+              <HandCoins className="size-4" /> בקשת צ'יפים בשבילו
+            </Button>
           )}
           {canManage && !closed && p.status === "playing" && flagged > 0 && (
             <p className="rounded-xl bg-warn/10 p-3 text-sm text-warn">
