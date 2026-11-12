@@ -12,9 +12,9 @@
     { "binding": "WORKER_SELF_REFERENCE", "service": "pokertable" }
   ],
   // Served at the custom domain (DNS record + certificate are created automatically
-  // when realizeaisolution.com is a zone in the same Cloudflare account)
+  // when realizeaisolutions.com is a zone in the same Cloudflare account)
   "routes": [
-    { "pattern": "pokertable.realizeaisolution.com", "custom_domain": true }
+    { "pattern": "pokertable.realizeaisolutions.com", "custom_domain": true }
   ],
   "observability": { "enabled": true }
 }

@@ -1,6 +1,6 @@
 # APK לאנדרואיד
 
-אחרי שהאתר עלה ל-`https://pokertable.realizeaisolution.com`:
+אחרי שהאתר עלה ל-`https://pokertable.realizeaisolutions.com`:
 
 1. נכנסים ל-[pwabuilder.com](https://www.pwabuilder.com), מדביקים את הכתובת → Package for stores → Android.
 2. Package ID: `com.realizeaisolution.pokertable`. אפשר להשאיר את שאר ההגדרות.
