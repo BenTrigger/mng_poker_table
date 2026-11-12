@@ -64,7 +64,7 @@ reset role;
 
 -- Dani joins with the general table link first (separate pending member)
 select tests.login('dani');
-select tests.eq(public.join_table(:'table_code'), 'pending', 'dani joins through the general link');
+select tests.eq(public.join_table(:'table_code'), 'active', 'dani joins through the general link');
 reset role;
 select tests.put('m_dani', (select id from table_members where table_id = tests.id('table') and user_id = tests.id('dani')));
 
@@ -77,8 +77,8 @@ select tests.throws(format($$ select public.link_guest(%L, %L) $$, tests.id('m_p
 select tests.throws(format($$ select public.link_guest(%L, %L) $$, tests.id('g_dani'), tests.id('g_yossi')), '%not a signed-in member%', 'a guest can only be linked to a signed-in member');
 select public.link_guest(tests.id('g_dani'), tests.id('m_dani'));
 select tests.eq((select count(*)::int from table_members where id = tests.id('g_dani')), 0, 'the guest row is gone after linking');
-select tests.eq((select status from table_members where id = tests.id('m_dani')), 'active', 'linking also approves the pending member');
-select tests.eq((select net from night_players where night_id = tests.id('n1') and member_id = tests.id('m_dani')), -100::numeric, 'night history moves to the real account');
+select tests.eq((select status from table_members where id = tests.id('m_dani')), 'active', 'the linked member stays active');
+select tests.eq((select net from night_players_view where night_id = tests.id('n1') and member_id = tests.id('m_dani')), -100::numeric, 'night history moves to the real account');
 select tests.eq((select count(*)::int from chip_requests where member_id = tests.id('m_dani')), 1, 'chip requests move too');
 select tests.eq((select from_member from settlements where night_id = tests.id('n1')), tests.id('m_dani'), 'open debts move too');
 reset role;

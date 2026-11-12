@@ -75,7 +75,9 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
   }
 
   const { signup: s, table, seats } = view;
-  const myId = view.me?.status === "active" ? view.me.id : null;
+  // a player who joined through this link holds their place while the admin approves them
+  const myId = view.me && view.me.status !== "removed" ? view.me.id : null;
+  const awaitingApproval = view.me?.status === "pending" && !!myId;
   const mine = seats.find((x) => x.member_id === myId) ?? null;
   const map = seatMap(seats, s.seats);
   const wait = waitingList(seats);
@@ -338,6 +340,9 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
               <p className="w-full py-3 text-center text-sm text-muted">ההרשמה סגורה</p>
             )}
           </div>
+          {awaitingApproval && mine && (
+            <p className="mx-auto mt-2 max-w-lg text-center text-xs text-muted">המקום שמור לך. המנהל צריך לאשר אותך לשולחן, ואז תראה גם את הערבים והתוצאות.</p>
+          )}
           {isAdmin && open && !mine && (
             <div className="mx-auto mt-2 max-w-lg">
               <Button size="sm" variant="ghost" className="w-full" loading={busy === "claim"} onClick={() => claim(null)}>

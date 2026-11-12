@@ -43,7 +43,7 @@ test("a full game night with six players", async ({ browser, baseURL }) => {
   let nightUrl = "";
   let nightId = "";
 
-  await test.step("admin creates the table, friends join and get approved", async () => {
+  await test.step("admin creates the table, friends join with the link", async () => {
     const p = dana.page;
     await p.goto("/tables");
     await btn(p, "שולחן חדש").click();
@@ -52,22 +52,21 @@ test("a full game night with six players", async ({ browser, baseURL }) => {
     await p.waitForURL(/\/t\/[A-Z0-9]{6}\?tab=players/);
     code = new URL(p.url()).pathname.split("/")[2];
 
+    // the table link is the invite: each friend lands straight in the table
     for (const pl of [yossi, avi, michal, ron]) {
       await pl.page.goto(`/join/${code}`);
-      await btn(pl.page, "הצטרפות").click();
-      await expect(pl.page.getByText("הבקשה נשלחה")).toBeVisible();
+      await pl.page.waitForURL(new RegExp(`/t/${code}$`));
+      await expect(pl.page.getByRole("heading", { name: "ערב פוקר סימולציה" })).toBeVisible();
     }
     const { data: t } = await db().from("poker_tables").select("id").eq("code", code).single();
     await expect
-      .poll(async () => (await db().from("table_members").select("id").eq("table_id", t!.id).eq("status", "pending")).data?.length, {
-        message: "join requests reach the database",
+      .poll(async () => (await db().from("table_members").select("id").eq("table_id", t!.id).eq("status", "active")).data?.length, {
+        message: "the friends joined the table",
       })
-      .toBe(4);
-    // the admin sees the requests arrive live
-    await expect(p.getByText("מבקשים להצטרף (4)"), "join requests show up live on the admin's phone").toBeVisible({ timeout: 20_000 });
-    for (let i = 4; i > 0; i--) {
-      await btn(p, "אישור").first().click();
-      await expect(p.getByText(i > 1 ? `מבקשים להצטרף (${i - 1})` : "מבקשים להצטרף")).toHaveCount(i > 1 ? 1 : 0);
+      .toBe(5);
+    // the admin sees them arrive live
+    for (const pl of [yossi, avi, michal, ron]) {
+      await expect(p.locator("main").getByText(pl.name, { exact: true }).first(), "new members show up live on the admin's phone").toBeVisible({ timeout: 20_000 });
     }
   });
 
@@ -226,11 +225,7 @@ test("a full game night with six players", async ({ browser, baseURL }) => {
   everyone.push(noa);
   await test.step("Noa arrives late: joins the table, the admin seats her, she buys in; a guest added by mistake is removed", async () => {
     await noa.page.goto(`/join/${code}`);
-    await btn(noa.page, "הצטרפות").click();
-    await expect(noa.page.getByText("הבקשה נשלחה")).toBeVisible();
-    await dana.page.goto(`/t/${code}?tab=players`);
-    await btn(dana.page, "אישור").click();
-    await dana.page.goto(nightUrl);
+    await noa.page.waitForURL(new RegExp(`/t/${code}$`));
 
     await btn(dana.page, "ניהול הערב").click();
     const s = sheet(dana.page);

@@ -3,7 +3,7 @@
 // list and cancellations, host and address edits, opening the night from the
 // sign-up, "each player sees only their own" results, settling through the
 // cashier, and what a regular player must not be able to do through the API.
-import { expect, test, type Page } from "@playwright/test";
+import { devices, expect, test, type Page } from "@playwright/test";
 import { btn, db, newPlayer, sheet, simConfigured, Vision, warmRealtime, type Player } from "./sim";
 
 test.skip(!simConfigured, "needs a local Supabase (supabase start), see e2e-sim/README.md");
@@ -36,7 +36,7 @@ test("invites, early sign-up with seats, table rules and permissions", async ({ 
   const memberId = async (name: string) =>
     (await db().from("table_members").select("id").eq("table_id", tableId).eq("display_name", name).single()).data!.id as string;
 
-  await test.step("joining by code: the admin approves one and rejects a stranger", async () => {
+  await test.step("the table link and the code join at once; someone removed comes back only with the admin's approval", async () => {
     await alon.page.goto("/tables");
     await btn(alon.page, "שולחן חדש").click();
     await sheet(alon.page).locator("input").fill("שולחן הרשמות");
@@ -45,26 +45,59 @@ test("invites, early sign-up with seats, table rules and permissions", async ({ 
     code = new URL(alon.page.url()).pathname.split("/")[2];
     tableId = (await db().from("poker_tables").select("id").eq("code", code).single()).data!.id;
 
-    for (const pl of [hadar, stranger]) {
-      await pl.page.goto("/tables");
-      await btn(pl.page, "הצטרפות בקוד").click();
-      await sheet(pl.page).locator("input").fill(code.toLowerCase());
-      await btn(sheet(pl.page), "המשך").click();
-      await expect(pl.page.getByRole("heading", { name: "שולחן הרשמות" })).toBeVisible();
-      await btn(pl.page, "הצטרפות").click();
-      await expect(pl.page.getByText("הבקשה נשלחה")).toBeVisible();
-    }
-    await expect(alon.page.getByText("מבקשים להצטרף (2)")).toBeVisible({ timeout: 20_000 });
-    const card = (name: string) => alon.page.locator("div.rounded-3xl", { hasText: name }).filter({ has: alon.page.getByRole("button", { name: "אישור" }) });
-    await card("זר").getByRole("button", { name: "דחייה" }).click();
-    await card("הדר").getByRole("button", { name: "אישור" }).click();
-    await expect(alon.page.getByText("מבקשים להצטרף")).toHaveCount(0);
+    // the stranger runs a table of their own, which nobody else may see
+    const other = (await stranger.api.rpc("create_table", { p_name: "השולחן של זר" })).data as { id: string; code: string };
 
-    // the stranger sees nothing of the table, even through the API
+    // הדר opens the table link before signing in: Google sign-in, then straight into the table
+    const link = `/join/${code}`;
+    const fresh = await browser.newContext({ ...devices["Pixel 7"], baseURL });
+    const anon = await fresh.newPage();
+    await anon.goto(link);
+    await anon.waitForURL(/\/\?next=/);
+    expect(new URL(anon.url()).searchParams.get("next")).toBe(link);
+    await fresh.close();
+    // (Google itself cannot run here: the sign-in comes back to /auth/callback?next=..., which lands on the link)
+    await hadar.page.goto(`/auth/callback?next=${encodeURIComponent(link)}`);
+    await hadar.page.waitForURL(new RegExp(`/t/${code}$`));
+    await expect(hadar.page.getByRole("heading", { name: "שולחן הרשמות" })).toBeVisible();
+
+    // typing the code is the same
+    await stranger.page.goto("/tables");
+    await btn(stranger.page, "הצטרפות בקוד").click();
+    await sheet(stranger.page).locator("input").fill(code.toLowerCase());
+    await btn(sheet(stranger.page), "המשך").click();
+    await stranger.page.waitForURL(new RegExp(`/t/${code}$`));
+    expect((await db().from("table_members").select("status").eq("table_id", tableId).in("user_id", [hadar.userId, stranger.userId])).data!.map((m) => m.status)).toEqual(["active", "active"]);
+
+    // each one sees only their own tables
+    await hadar.page.goto("/tables");
+    await expect(hadar.page.getByText("שולחן הרשמות")).toBeVisible();
+    await expect(hadar.page.getByText("השולחן של זר")).toHaveCount(0);
+    const { data: peekOther } = await hadar.api.from("poker_tables").select("id").eq("id", other.id);
+    expect(peekOther).toEqual([]);
+    const { data: otherMembers } = await hadar.api.from("table_members").select("id").eq("table_id", other.id);
+    expect(otherMembers).toEqual([]);
+    const { data: myTables } = await hadar.api.from("poker_tables").select("name");
+    expect(myTables!.map((t) => t.name)).toEqual(["שולחן הרשמות"]);
+
+    // the admin removes the stranger; the link no longer gets them in, it asks the admin
+    await alon.page.goto(`/t/${code}?tab=players`);
+    await alon.page.locator("main div.rounded-3xl", { hasText: "זר" }).first().click();
+    await btn(sheet(alon.page), "מחיקה לצמיתות").click();
+    await expect.poll(async () => (await db().from("table_members").select("id").eq("table_id", tableId).eq("user_id", stranger.userId)).data).toEqual([]);
+    await stranger.page.goto(link);
+    await expect(stranger.page.getByText("הבקשה נשלחה")).toBeVisible();
     const { data: peek } = await stranger.api.from("poker_tables").select("*").eq("id", tableId);
     expect(peek).toEqual([]);
-    const { data: members } = await stranger.api.from("table_members").select("*").eq("table_id", tableId);
-    expect(members).toEqual([]);
+    await alon.page.reload();
+    await expect(alon.page.getByText("מבקשים להצטרף (1)")).toBeVisible();
+    await alon.page.locator("div.rounded-3xl", { hasText: "זר" }).filter({ has: alon.page.getByRole("button", { name: "אישור" }) }).getByRole("button", { name: "דחייה" }).click();
+    await expect(alon.page.getByText("מבקשים להצטרף")).toHaveCount(0);
+    // rejected (deleted) is still not a way back in
+    await stranger.page.goto(link);
+    await expect(stranger.page.getByText("הבקשה נשלחה")).toBeVisible();
+    const { data: members } = await stranger.api.from("table_members").select("user_id, status").eq("table_id", tableId);
+    expect(members).toEqual([{ user_id: stranger.userId, status: "pending" }]); // only their own request
     // a wrong code says so
     await stranger.page.goto("/join/ZZZZZZ");
     await expect(stranger.page.getByText("שולחן לא נמצא")).toBeVisible();
@@ -123,7 +156,7 @@ test("invites, early sign-up with seats, table rules and permissions", async ({ 
     await alon.page.reload();
     await btn(alon.page, "גם אני משחק: תפוס לי מקום").click();
     await expect(alon.page.getByText("אתה ברשימת ההמתנה")).toBeVisible();
-    // the seat taker joined the table through the link
+    // the link is the invite: the seat takers joined the table at once
     expect((await db().from("table_members").select("status").eq("table_id", tableId).eq("user_id", beni.userId).single()).data!.status).toBe("active");
   });
 
@@ -240,6 +273,21 @@ test("invites, early sign-up with seats, table rules and permissions", async ({ 
     await dor.page.goto(`/t/${code}?tab=stats`);
     await expect(dor.page.getByText("המנהל הגדיר שכל שחקן רואה רק את הנתונים שלו")).toBeVisible();
     await expect(dor.page.locator("main").getByText("הדר")).toHaveCount(0);
+
+    // and the database keeps it that way, not only the screens
+    const nightId0 = nightUrl.split("/").pop()!;
+    const { data: seen } = await dor.api.from("night_players_view").select("member_id, net, final_chips").eq("night_id", nightId0);
+    const dorId = await memberId("דור");
+    expect(seen!.length).toBeGreaterThan(1);
+    expect(seen!.filter((x) => x.net !== null).map((x) => x.member_id)).toEqual([dorId]);
+    expect(seen!.filter((x) => x.final_chips !== null).map((x) => x.member_id)).toEqual([dorId]);
+    const { error: direct } = await dor.api.from("night_players").select("net").eq("night_id", nightId0);
+    expect(direct?.message).toContain("permission denied");
+    const { data: dorTransfers } = await dor.api.from("settlements").select("from_member, to_member").eq("night_id", nightId0);
+    expect(dorTransfers!.length).toBeGreaterThan(0);
+    expect(dorTransfers!.every((x) => x.from_member === dorId || x.to_member === dorId)).toBe(true);
+    const { data: adminSees } = await alon.api.from("night_players_view").select("net").eq("night_id", nightId0).not("net", "is", null);
+    expect(adminSees!.length).toBe(seen!.length);
 
     // a debtor cannot mark their own debt as paid; the creditor can
     const nightId = nightUrl.split("/").pop()!;

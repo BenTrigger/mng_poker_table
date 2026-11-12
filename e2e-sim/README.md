@@ -6,7 +6,7 @@ every migration applied, realtime on, and RLS as in production.
 
 What happens in the night:
 
-1. The admin creates a table, four friends join with the code, the admin approves them.
+1. The admin creates a table and four friends join straight in with the table link.
 2. The admin defines the chip set, 1000 chips = ₪100, picks Yossi as cashier and opens the night.
 3. Requests and hand-overs, each with a photo:
    - the photo matches the request, approved at once;
@@ -26,14 +26,16 @@ to exactly zero, transfers that match the nets.
 
 Two more scenarios run the same way:
 
-- `signup-and-rules.sim.ts`: joining by code (approve, reject, wrong code), a
-  personal invite link, early sign-up with seats, a waiting list, address edits
+- `signup-and-rules.sim.ts`: the table link from signed-out to inside the table,
+  joining by code, each user seeing only their own tables, a removed player
+  coming back only with the admin's approval, a personal invite link, early sign-up with seats, a waiting list, address edits
   seen live, cancelling a seat (players and the admin, also after registration
   closes), "each sees only their own" results, settling everything through the
   cashier, and what a player must not be able to do through the API.
 - `tournament.sim.ts`: a two-table tournament from registration (waiting list,
   a drop-out) through the seat draw, bust-outs, a rebuy, an add-on, table
-  balancing and the final, with prizes that add up to the pool.
+  balancing and the final, with prizes that add up to the pool and saved
+  transfers that the winner marks as received.
 
 Chip recognition is mocked in the browser (`/api/count-chips`), so each photo
 "sees" exactly what the scenario says and no AI credit is used.

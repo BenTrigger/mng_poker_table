@@ -261,4 +261,16 @@ export type TournamentView = {
   me: { id: string; status: Member["status"]; role: Member["role"] } | null;
   organizer_member_id: string | null;
   entries: TournamentEntryView[];
+  /** saved "who pays whom" (only the ones the reader may see) */
+  transfers?: TournamentTransfer[];
+};
+
+export type TournamentTransfer = {
+  id: string;
+  tournament_id: string;
+  from_member: string;
+  to_member: string;
+  amount: number;
+  paid: boolean;
+  paid_at: string | null;
 };

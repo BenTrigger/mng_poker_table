@@ -37,15 +37,12 @@ select tests.eq((select count(*)::int from public.peek_table(lower(:'table_code'
 reset role;
 
 select tests.login('dana');
-select tests.eq(public.join_table(:'table_code'), 'pending', 'joining by code creates a pending request');
-select tests.eq(public.join_table(:'table_code'), 'pending', 'joining twice is harmless');
-select tests.eq((select count(*)::int from poker_tables where id = tests.id('table')), 0, 'pending member cannot see the table yet');
+select tests.eq(public.join_table(:'table_code'), 'active', 'the code or the table link joins the table at once');
+select tests.eq(public.join_table(:'table_code'), 'active', 'joining twice is harmless');
 select tests.throws($$ select public.join_table('NOPE99') $$, '%table not found%', 'unknown code is refused');
 reset role;
 
 select tests.login('ben');
-select tests.eq((select count(*)::int from table_members where table_id = tests.id('table') and status = 'pending'), 1, 'admin sees the pending request');
-update table_members set status = 'active' where table_id = tests.id('table') and user_id = tests.id('dana');
 select tests.put('m_ben', (select id from table_members where table_id = tests.id('table') and user_id = tests.id('ben')));
 select tests.put('m_dana', (select id from table_members where table_id = tests.id('table') and user_id = tests.id('dana')));
 -- admin adds a guest (no account yet)
@@ -53,7 +50,7 @@ with x as (insert into table_members (table_id, display_name) values (tests.id('
 reset role;
 
 select tests.login('dana');
-select tests.eq((select count(*)::int from poker_tables where id = tests.id('table')), 1, 'approved member sees the table');
+select tests.eq((select count(*)::int from poker_tables where id = tests.id('table')), 1, 'a member sees the table');
 select tests.eq((select count(*)::int from table_members where table_id = tests.id('table')), 3, 'member sees everyone at the table');
 select tests.eq(tests.affected(format($$ update table_members set role = 'admin' where id = %L $$, tests.id('m_dana'))), 0, 'player cannot make themself admin');
 select tests.throws(format($$ insert into table_members (table_id, display_name) values (%L, 'x') $$, tests.id('table')), '%row-level security%', 'player cannot add members');
@@ -65,8 +62,10 @@ select tests.eq((select user_id from table_members where id = tests.id('m_yossi'
 select tests.eq((select display_name from table_members where id = tests.id('m_yossi')), 'יוסי', 'claimed guest keeps the name the admin gave');
 reset role;
 
-select tests.login('stranger');
-select tests.eq(public.join_table(:'table_code', tests.id('m_yossi')), 'pending', 'an already claimed invite cannot be claimed again');
+select tests.make_user('friend', 'Friend');
+select tests.login('friend');
+select tests.eq(public.join_table(:'table_code', tests.id('m_yossi')), 'active', 'someone else with a used personal link joins as themself');
+select tests.eq((select user_id from table_members where id = tests.id('m_yossi')), tests.id('yossi'), 'an already claimed invite cannot be claimed again');
 reset role;
 
 -- ---------------------------------------------------------------- chip set + night
@@ -198,7 +197,7 @@ select tests.throws(format($$ update settlements set amount = 1 where id = %L $$
 select tests.eq(tests.affected(format($$ update settlements set paid = true, paid_at = now() where id = %L $$, tests.id('settle2'))), 1, 'a creditor who is not admin can mark it paid');
 reset role;
 select tests.login('yossi');
-select tests.eq((select sum(net)::numeric from night_players where night_id = tests.id('night') and net is not null), -5::numeric, 'players can read results for stats');
+select tests.eq((select sum(net)::numeric from night_players_view where night_id = tests.id('night') and net is not null), -5::numeric, 'players can read results for stats');
 reset role;
 
 select tests.login('ben');
@@ -211,7 +210,8 @@ update table_members set status = 'removed', role = 'player' where id = tests.id
 reset role;
 select tests.login('yossi');
 select tests.eq((select count(*)::int from poker_tables where id = tests.id('table')), 0, 'removed player no longer sees the table');
-select tests.throws(format($$ select public.join_table(%L) $$, :'table_code'), '%removed from table%', 'removed player cannot rejoin by code');
+select tests.eq(public.join_table(:'table_code'), 'pending', 'a removed player who comes back waits for the admin');
+select tests.eq((select count(*)::int from poker_tables where id = tests.id('table')), 0, 'and still sees nothing');
 reset role;
 select tests.login('dana');
 select tests.eq(tests.affected(format($$ delete from poker_tables where id = %L $$, tests.id('table'))), 0, 'only the owner can delete the table');
