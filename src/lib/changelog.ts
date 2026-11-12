@@ -6,6 +6,15 @@ export type Release = { version: string; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.15.2",
+    date: "2026-11-12",
+    title: "מסירה בלחיצה אחת",
+    items: [
+      "בקופה, ליד כל בקשה יש \"✓ מסרתי\": לחיצה אחת מאשרת בלי צילום ובלי מסך נוסף",
+      "הצילום הוא כפתור מצלמה קטן ליד, למי שרוצה לצלם או למסור סכום אחר",
+    ],
+  },
+  {
     version: "1.15.1",
     date: "2026-11-12",
     title: "מסירה בלי צילום",

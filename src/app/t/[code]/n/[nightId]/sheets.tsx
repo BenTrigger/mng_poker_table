@@ -291,9 +291,9 @@ export function ChipCounter({
           </button>
         </div>
       ) : (
-        <button onClick={() => fileRef.current?.click()} className="flex h-32 w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gold/40 bg-gold/5 text-gold">
+        <button onClick={() => fileRef.current?.click()} className={`flex ${verdict ? "h-20" : "h-32"} w-full flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-gold/40 bg-gold/5 text-gold`}>
           <Camera className="size-8" />
-          <span className="text-sm font-bold">{hint}</span>
+          <span className="text-sm font-bold">{hint}{verdict ? " (לא חובה)" : ""}</span>
           {aiOn && <span className="flex items-center gap-1 text-[11px] text-muted"><Sparkles className="size-3" /> {chipSet?.chips.some((c) => c.images?.length) ? "אספור לפי תמונות הצ'יפים של הערכה" : "אספור לפי צבעים"}</span>}
         </button>
       )}
@@ -569,8 +569,12 @@ export function CashierSheet({
                 </>
               ) : (
                 <div className="flex gap-2">
-                  <Button size="sm" className="flex-1" onClick={() => { setErr(null); setActive(r); }}>
-                    <Camera className="size-4" /> מסירה וצילום
+                  {/* the usual path: hand the chips and confirm, no photo */}
+                  <Button size="sm" className="flex-1" disabled={busy} onClick={() => run(() => approve(r, Number(r.chips), { note: "אושר בלי צילום" }))}>
+                    <Check className="size-4" /> מסרתי {Number(r.chips).toLocaleString()}
+                  </Button>
+                  <Button size="sm" variant="soft" aria-label="מסירה וצילום" title="מסירה עם צילום או סכום אחר" onClick={() => { setErr(null); setActive(r); }}>
+                    <Camera className="size-4" />
                   </Button>
                   <Button size="sm" variant="danger" onClick={() => reject(r)} aria-label="דחייה">
                     <X className="size-4" />
