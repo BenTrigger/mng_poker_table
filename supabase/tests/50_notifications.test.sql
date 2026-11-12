@@ -18,9 +18,16 @@ select tests.put('table', (public.create_table('Notify table')).id);
 reset role;
 select code as table_code from poker_tables where id = tests.id('table') \gset
 
--- joining
+-- joining: through the code/link straight in; the admins are told
 select tests.login('p1'); select public.join_table(:'table_code'); reset role;
-select tests.eq(tests.n('admin', 'join_request'), 1, 'admin is told about a join request');
+select tests.eq(tests.n('admin', 'member_joined'), 1, 'admin is told someone joined the table');
+select tests.eq(tests.n('p1', 'member_joined'), 0, 'the one who joined is not');
+-- a removed player who comes back waits for approval
+select tests.login('admin');
+update table_members set status = 'removed' where table_id = tests.id('table') and user_id = tests.id('p1');
+reset role;
+select tests.login('p1'); select public.join_table(:'table_code'); reset role;
+select tests.eq(tests.n('admin', 'join_request'), 1, 'admin is told about a request to come back');
 select tests.login('admin');
 update table_members set status = 'active' where table_id = tests.id('table') and user_id = tests.id('p1');
 reset role;

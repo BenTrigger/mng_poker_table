@@ -25,7 +25,7 @@ select tests.throws(format($$ insert into tournaments (table_id, name, starts_at
   '%row-level security%', 'only the admin opens a tournament');
 select tests.eq(public.get_tournament(tests.id('t'))->>'me', null, 'link works before joining the table');
 select tests.eq(public.register_tournament(tests.id('t')), 'registered', 'a player registers from the link');
-select tests.eq((select status from table_members where table_id = tests.id('table') and user_id = tests.id('p1')), 'active', 'registering joins the table');
+select tests.eq((select status from table_members where table_id = tests.id('table') and user_id = tests.id('p1')), 'active', 'registering joins the table (the link is the invite)');
 select tests.eq(public.register_tournament(tests.id('t')), 'registered', 'registering twice is harmless');
 reset role;
 
@@ -98,7 +98,7 @@ select public.finish_tournament(tests.id('t'), (
     from (select id, row_number() over (order by status = 'playing' desc, busted_at desc) rn
             from tournament_entries where tournament_id = tests.id('t') and status in ('playing', 'busted')) x));
 select tests.eq((select status from tournaments where id = tests.id('t')), 'finished', 'finish');
-select tests.eq((select sum(prize) from tournament_entries where tournament_id = tests.id('t')), 500::numeric, 'prizes stored');
+select tests.eq((select sum(prize) from tournament_results_view where tournament_id = tests.id('t')), 500::numeric, 'prizes stored');
 select tests.eq((select count(*)::int from tournament_entries where tournament_id = tests.id('t') and place is null), 0, 'everyone has a place');
 select public.reopen_tournament(tests.id('t'));
 select tests.eq((select count(*)::int from tournament_entries where tournament_id = tests.id('t') and status = 'playing'), 1, 'reopen brings the winner back');

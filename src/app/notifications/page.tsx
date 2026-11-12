@@ -20,6 +20,7 @@ const ICONS: Record<string, React.ReactNode> = {
   signup_added: <Armchair className="size-5" />,
   signup_joined: <UserPlus className="size-5" />,
   join_request: <UserPlus className="size-5" />,
+  member_joined: <UserPlus className="size-5" />,
   join_approved: <CheckCircle2 className="size-5" />,
   chip_request: <Coins className="size-5" />,
   signup_cancelled: <Ban className="size-5" />,

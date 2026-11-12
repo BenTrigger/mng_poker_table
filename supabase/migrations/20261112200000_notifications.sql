@@ -409,6 +409,13 @@ begin
         where table_id = new.table_id and role = 'admin' and status = 'active' and user_id is not null),
       new.table_id, 'join_request', 'בקשת הצטרפות לשולחן', new.display_name || ' רוצה להצטרף ל' || v_t.name,
       '/t/' || v_t.code || '?tab=players');
+  elsif new.status = 'active' and new.user_id = auth.uid() and (tg_op = 'INSERT' or old.status <> 'active') then
+    -- joined through a link or the code (no approval needed): tell the admins
+    perform notify_users(
+      (select coalesce(array_agg(user_id), '{}') from table_members
+        where table_id = new.table_id and role = 'admin' and status = 'active' and user_id is not null),
+      new.table_id, 'member_joined', new.display_name || ' הצטרף לשולחן', v_t.name,
+      '/t/' || v_t.code || '?tab=players');
   elsif tg_op = 'UPDATE' and new.status = 'active' and old.status = 'pending' then
     perform notify_users(array[new.user_id], new.table_id, 'join_approved',
       'אושרת לשולחן ✅', 'ברוך הבא ל' || v_t.name, '/t/' || v_t.code);
