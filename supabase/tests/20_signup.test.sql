@@ -48,7 +48,14 @@ select tests.eq((select seat from signup_seats ss join table_members m on m.id =
 select tests.login('p1');
 select tests.throws(format($$ select public.resize_signup(%L, 2) $$, tests.id('signup')), '%admin only%', 'players cannot change the number of seats');
 select tests.throws(format($$ select public.admin_seat(%L, %L, null) $$, tests.id('signup'), tests.id('p4')), '%admin only%', 'players cannot move others');
+update signups set starts_at = now() + interval '9 days' where id = tests.id('signup');
 reset role;
+select tests.eq((select starts_at > now() + interval '8 days' from signups where id = tests.id('signup')), false, 'players cannot change the date');
+
+select tests.login('admin');
+update signups set starts_at = now() + interval '3 hours', location = 'אצל דני' where id = tests.id('signup');
+reset role;
+select tests.eq((select starts_at < now() + interval '1 day' and location = 'אצל דני' from signups where id = tests.id('signup')), true, 'the admin can fix the date and place');
 
 select tests.login('admin');
 select public.resize_signup(tests.id('signup'), 2);
