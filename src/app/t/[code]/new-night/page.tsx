@@ -3,6 +3,7 @@ import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Landmark, Plus, UserPlus } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
+import { addGuest as addGuestByName } from "@/lib/guests";
 import { useAuth, useTable, logEvent } from "@/lib/hooks";
 import { TopBar } from "@/components/top-bar";
 import { Avatar, Button, Card, ChipDot, Field, Sheet, Spinner, inputCls } from "@/components/ui";
@@ -85,10 +86,14 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
   }
 
   async function addGuest() {
-    const { data } = await supabase().from("table_members").insert({ table_id: t.table!.id, display_name: guest.trim() }).select().single();
-    setGuest("");
-    await t.reload();
-    if (data) setSelected((s) => (s.length >= MAX_PLAYERS ? s : [...s, data.id]));
+    try {
+      const data = await addGuestByName(t.table!.id, guest);
+      setGuest("");
+      await t.reload();
+      setSelected((s) => (s.length >= MAX_PLAYERS || s.includes(data.id) ? s : [...s, data.id]));
+    } catch (e) {
+      setErr((e as Error).message);
+    }
   }
 
   async function start() {
@@ -201,7 +206,7 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
               );
             })}
             <div className="flex gap-2 p-2">
-              <input className={`${inputCls} h-11`} placeholder="שחקן חדש (שם)" value={guest} onChange={(e) => setGuest(e.target.value)} />
+              <input className={`${inputCls} h-11`} placeholder="אורח חדש (רק שם)" value={guest} onChange={(e) => setGuest(e.target.value)} onKeyDown={(e) => e.key === "Enter" && guest.trim() && addGuest()} />
               <Button size="md" variant="soft" disabled={!guest.trim()} onClick={addGuest}>
                 <UserPlus className="size-4" />
               </Button>
