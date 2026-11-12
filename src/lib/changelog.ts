@@ -6,6 +6,15 @@ export type Release = { version: string; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.7.3",
+    date: "2026-11-12",
+    title: "תיקון ניווט בוויז",
+    items: [
+      "כפתור \"ניווט בוויז\" פותח עכשיו ניווט ישר לכתובת (קודם וויז נפתח בלי היעד)",
+      "גם קישור הוויז בהודעת הוואטסאפ מוביל ישר לכתובת",
+    ],
+  },
+  {
     version: "1.7.2",
     date: "2026-11-12",
     title: "תיקונים מסימולציה של ערב שלם",
