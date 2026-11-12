@@ -1,6 +1,6 @@
 "use client";
 import { use, useEffect, useMemo, useRef, useState } from "react";
-import { Landmark, HandCoins, Flag, ListChecks, MoreHorizontal, AlertTriangle, Activity } from "lucide-react";
+import { Landmark, HandCoins, Flag, ListChecks, Users, AlertTriangle, Activity } from "lucide-react";
 import { useAuth, useNight, useTable } from "@/lib/hooks";
 import { chipRate, formatMoney, formatSigned, playerLines } from "@/lib/calc";
 import { TopBar } from "@/components/top-bar";
@@ -80,8 +80,8 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
         back={`/t/${code}`}
         right={
           t.isAdmin && !closed ? (
-            <button className="rounded-full p-2 text-muted hover:bg-white/5" onClick={() => setSheet("admin")} aria-label="ניהול">
-              <MoreHorizontal className="size-5" />
+            <button className="flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1.5 text-xs font-bold" onClick={() => setSheet("admin")} aria-label="ניהול הערב">
+              <Users className="size-4" /> שחקנים וקופאי
             </button>
           ) : undefined
         }
@@ -213,7 +213,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
         />
       )}
       <CloseSheet open={sheet === "close"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} pendingCount={pending.length + flagged.length} handovers={n.handovers} table={t.table!} />
-      <AdminSheet open={sheet === "admin"} onClose={() => setSheet(null)} night={night} players={n.players} members={t.members} onHandover={() => setSheet("handover")} />
+      <AdminSheet open={sheet === "admin"} onClose={() => setSheet(null)} night={night} players={n.players} members={t.members} requests={n.requests} onHandover={() => setSheet("handover")} onCashout={(id) => setSheet({ player: id })} />
       <HandoverSheet open={sheet === "handover"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} handovers={n.handovers} />
     </>
   );
