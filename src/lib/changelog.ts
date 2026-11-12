@@ -6,6 +6,12 @@ export type Release = { version: string; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.14.1",
+    date: "2026-11-12",
+    title: "אייקון להתראות",
+    items: ["בהתראות לטלפון מופיע עכשיו אייקון של צ'יפ עם ספייד בשורת המצב, במקום ריבוע לבן"],
+  },
+  {
     version: "1.14.0",
     date: "2026-11-12",
     title: "אישור הגעה וערכה התחלתית",

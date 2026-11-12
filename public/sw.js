@@ -1,7 +1,7 @@
 // Minimal service worker: caches the app shell so the PWA opens fast and
 // installs cleanly. Data always comes from the network (it is live).
 const CACHE = "allin-" + (new URL(self.location).searchParams.get("v") || "v1");
-const SHELL = ["/tables", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
+const SHELL = ["/tables", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/badge-96.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -52,7 +52,8 @@ self.addEventListener("push", (e) => {
       await self.registration.showNotification(msg.title || "All In", {
         body: msg.body || "",
         icon: "/icons/icon-192.png",
-        badge: "/icons/icon-192.png",
+        // status-bar icon on Android: white shape on transparent, or it shows as a white square
+        badge: "/icons/badge-96.png",
         tag: msg.tag,
         dir: "rtl",
         lang: "he",
