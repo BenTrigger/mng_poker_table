@@ -1,7 +1,7 @@
 # Deploys everything on every push to main:
 #   1. database migrations -> Supabase
 #   2. Supabase auth settings (site URL, redirect URLs, Google sign-in)
-#   3. build + deploy -> Cloudflare Workers at pokertable.realizeaisolution.com
+#   3. build + deploy -> Cloudflare Workers at pokertable.realizeaisolutions.com
 # Required repository secrets are listed in docs/DEPLOY.md.
 name: Deploy
 # Optional: fully scripted deploy. Run manually (Actions -> Deploy) once its
@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  APP_URL: https://pokertable.realizeaisolution.com
+  APP_URL: https://pokertable.realizeaisolutions.com
 
 jobs:
   deploy:

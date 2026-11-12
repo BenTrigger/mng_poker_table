@@ -60,7 +60,10 @@ try {
   const { rows } = await client.query("select version from app_meta.migrations");
   const done = new Set(rows.map((r) => r.version));
 
-  if (done.size === 0) {
+  // Baseline only a database that already has the schema (set up by hand);
+  // a brand-new database gets every migration.
+  const { rows: existing } = await client.query("select to_regclass('public.poker_tables') is not null as has_schema");
+  if (done.size === 0 && existing[0].has_schema) {
     const base = files.filter((f) => f.slice(0, 14) <= BASELINE);
     for (const f of base) {
       await client.query("insert into app_meta.migrations (version, name) values ($1, $2)", [f.slice(0, 14), `${f} (baseline)`]);

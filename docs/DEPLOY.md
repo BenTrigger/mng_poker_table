@@ -1,4 +1,4 @@
-# העלאה ל-Vercel · pokertable.realizeaisolution.com
+# העלאה ל-Vercel · pokertable.realizeaisolutions.com
 
 Vercel בונה ומעלה אוטומטית בכל push לענף הראשי של הריפו. כל עדכון עולה לבד, והמשתמשים רואים "גרסה חדשה זמינה".
 
@@ -8,13 +8,13 @@ Vercel בונה ומעלה אוטומטית בכל push לענף הראשי של
 1. פרויקט חדש (Region: Frankfurt). התוכנית החינמית מספיקה.
 2. מיגרציות רצות אוטומטית בכל deploy ל-production (`scripts/migrate.mjs`), דרך `POSTGRES_URL_NON_POOLING` שאינטגרציית Supabase↔Vercel מגדירה.
 3. Authentication → URL Configuration:
-   - Site URL: `https://pokertable.realizeaisolution.com`
-   - Redirect URLs: `https://pokertable.realizeaisolution.com/**`, `https://*.vercel.app/**`, `http://localhost:3000/**`
+   - Site URL: `https://pokertable.realizeaisolutions.com`
+   - Redirect URLs: `https://pokertable.realizeaisolutions.com/**`, `https://*.vercel.app/**`, `http://localhost:3000/**`
 4. Authentication → Providers → Google: Client ID + Secret (שלב 2).
 
 ### 2. Google OAuth
 [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials) → Create credentials → OAuth client ID → Web application:
-- Authorized JavaScript origins: `https://pokertable.realizeaisolution.com`
+- Authorized JavaScript origins: `https://pokertable.realizeaisolutions.com`
 - Authorized redirect URIs: `https://<project-ref>.supabase.co/auth/v1/callback`
 
 OAuth consent screen: App name "All In" → **Publish app**.
@@ -26,10 +26,10 @@ OAuth consent screen: App name "All In" → **Publish app**.
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `ANTHROPIC_API_KEY` (אופציונלי, לספירת צ'יפים מתמונה)
 3. Deploy.
-4. Settings → Domains → `pokertable.realizeaisolution.com`. Vercel יציג רשומת DNS אחת (CNAME ל-`cname.vercel-dns.com`). מוסיפים אותה ב-Cloudflare DNS של realizeaisolution.com עם **DNS only** (ענן אפור).
+4. Settings → Domains → `pokertable.realizeaisolutions.com`. Vercel יציג רשומת DNS אחת (CNAME ל-`cname.vercel-dns.com`). מוסיפים אותה ב-Cloudflare DNS של realizeaisolutions.com עם **DNS only** (ענן אפור).
 
 ### בדיקה
-- `https://pokertable.realizeaisolution.com/api/version`
+- `https://pokertable.realizeaisolutions.com/api/version`
 - כניסה עם Google, יצירת שולחן, פתיחת ערב.
 
 ## חלופה: Cloudflare Workers

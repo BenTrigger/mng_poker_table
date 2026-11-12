@@ -24,7 +24,7 @@
 
 ## העלאה, עדכונים ואנדרואיד
 
-- [docs/DEPLOY.md](docs/DEPLOY.md): Supabase, Google ו-Vercel בדומיין pokertable.realizeaisolution.com
+- [docs/DEPLOY.md](docs/DEPLOY.md): Supabase, Google ו-Vercel בדומיין pokertable.realizeaisolutions.com
 - [docs/RELEASING.md](docs/RELEASING.md): איך משחררים גרסה, ומה המשתמשים רואים
 - [docs/ANDROID.md](docs/ANDROID.md): בניית APK
 
