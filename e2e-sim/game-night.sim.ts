@@ -56,9 +56,14 @@ test("a full game night with six players", async ({ browser, baseURL }) => {
       await btn(pl.page, "הצטרפות").click();
       await expect(pl.page.getByText("הבקשה נשלחה")).toBeVisible();
     }
+    const { data: t } = await db().from("poker_tables").select("id").eq("code", code).single();
+    await expect
+      .poll(async () => (await db().from("table_members").select("id").eq("table_id", t!.id).eq("status", "pending")).data?.length, {
+        message: "join requests reach the database",
+      })
+      .toBe(4);
     // the admin sees the requests arrive live
-    // (the first realtime subscription on a fresh stack can take a while)
-    await expect(p.getByText("מבקשים להצטרף (4)")).toBeVisible({ timeout: 30_000 });
+    await expect(p.getByText("מבקשים להצטרף (4)"), "join requests show up live on the admin's phone").toBeVisible({ timeout: 20_000 });
     for (let i = 4; i > 0; i--) {
       await btn(p, "אישור").first().click();
       await expect(p.getByText(i > 1 ? `מבקשים להצטרף (${i - 1})` : "מבקשים להצטרף")).toHaveCount(i > 1 ? 1 : 0);

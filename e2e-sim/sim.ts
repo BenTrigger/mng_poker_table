@@ -97,6 +97,7 @@ export async function newPlayer(browser: Browser, baseURL: string, vision: Visio
   const page = await ctx.newPage();
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  if (process.env.CI) page.on("console", (m) => console.log(`[${name}] ${m.type()}: ${m.text().slice(0, 300)}`));
   page.on("console", (m) => {
     if (m.type() === "error" && !/Failed to load resource|websocket|ERR_ABORTED/i.test(m.text())) errors.push(`${name}: ${m.text()}`);
   });
