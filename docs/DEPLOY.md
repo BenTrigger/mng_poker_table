@@ -6,7 +6,7 @@ Vercel בונה ומעלה אוטומטית בכל push לענף הראשי של
 
 ### 1. Supabase
 1. פרויקט חדש (Region: Frankfurt). התוכנית החינמית מספיקה.
-2. SQL Editor: מריצים את הקבצים ב-`supabase/migrations` לפי הסדר.
+2. מיגרציות רצות אוטומטית בכל deploy ל-production (`scripts/migrate.mjs`), דרך `POSTGRES_URL_NON_POOLING` שאינטגרציית Supabase↔Vercel מגדירה.
 3. Authentication → URL Configuration:
    - Site URL: `https://pokertable.realizeaisolution.com`
    - Redirect URLs: `https://pokertable.realizeaisolution.com/**`, `https://*.vercel.app/**`, `http://localhost:3000/**`
