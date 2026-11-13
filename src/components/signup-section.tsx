@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarPlus, ChevronLeft, Hourglass, MapPin, Armchair } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import { signupDate, signupTime, useTableSignups } from "@/lib/signup";
+import { signupDate, signupSettingsFrom, signupTime, useTableSignups } from "@/lib/signup";
+import type { LastSettings } from "@/lib/types";
 import { Badge, Button, Card, Field, Sheet, inputCls } from "./ui";
 
 /** Next Thursday at 21:00 as a value for <input type="datetime-local"> */
@@ -17,13 +18,22 @@ function defaultStart() {
 }
 
 /** Upcoming early sign-ups on the table's Night tab, and the admin's "open sign-up" button */
-export function UpcomingSignups({ tableId, isAdmin }: { tableId: string; isAdmin: boolean }) {
+export function UpcomingSignups({
+  tableId, isAdmin, lastSettings, open: openProp, onOpenChange,
+}: {
+  tableId: string; isAdmin: boolean; lastSettings?: LastSettings | null;
+  /** the create sheet can also be opened from outside (the Night tab's main card) */
+  open?: boolean; onOpenChange?: (open: boolean) => void;
+}) {
   const router = useRouter();
   const { rows } = useTableSignups(tableId);
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = onOpenChange ?? setOpenState;
   const [startsAt, setStartsAt] = useState(defaultStart);
   const [seats, setSeats] = useState(9);
   const [place, setPlace] = useState("");
+  const [nightName, setNightName] = useState("");
   const [address, setAddress] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -38,12 +48,15 @@ export function UpcomingSignups({ tableId, isAdmin }: { tableId: string; isAdmin
       .from("signups")
       .insert({
         table_id: tableId,
+        name: nightName.trim().slice(0, 60) || null,
         starts_at: new Date(startsAt).toISOString(),
         seats,
         location: place.trim() || null,
         address: address.trim() || null,
         note: note.trim() || null,
         created_by: u.user?.id,
+        // the night's settings start from last time; the admin can change them on the sign-up
+        settings: signupSettingsFrom(lastSettings),
       })
       .select()
       .single();
@@ -66,7 +79,7 @@ export function UpcomingSignups({ tableId, isAdmin }: { tableId: string; isAdmin
       </div>
       {rows.length === 0 ? (
         <Card className="text-center text-sm text-muted">
-          קובעים ערב? פתח הרשמה מוקדמת, שתף בוואטסאפ, וכל אחד תופס כיסא בשולחן עד שמתמלא.
+          קובעים ערב? &quot;הרשמה מוקדמת&quot;: בוחרים תאריך, קופאי ומחיר כניסה, משתפים בוואטסאפ, וכל אחד תופס כיסא עד שהשולחן מתמלא.
         </Card>
       ) : (
         <div className="space-y-2">
@@ -82,7 +95,8 @@ export function UpcomingSignups({ tableId, isAdmin }: { tableId: string; isAdmin
                     </div>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-bold">
+                    {s.name && <div className="truncate font-bold text-gold">{s.name}</div>}
+                    <div className={`truncate ${s.name ? "text-sm" : "font-bold"}`}>
                       {signupDate(s.starts_at)} · <span className="num">{signupTime(s.starts_at)}</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
@@ -120,6 +134,9 @@ export function UpcomingSignups({ tableId, isAdmin }: { tableId: string; isAdmin
 
       <Sheet open={open} onClose={() => setOpen(false)} title="הרשמה מוקדמת לערב">
         <div className="space-y-4">
+          <Field label="שם הערב (לא חובה)" hint="נפרד משם השולחן. מופיע בהרשמה, בוואטסאפ ובהיסטוריה.">
+            <input className={inputCls} placeholder="השישי ה-13" maxLength={60} value={nightName} onChange={(e) => setNightName(e.target.value)} />
+          </Field>
           <Field label="מתי">
             <input type="datetime-local" className={inputCls} value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
           </Field>

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Check, X, AlertTriangle, Pencil, Share2, Landmark, UserPlus, LogOut, ImageIcon, Sparkles, Trash2, ArrowLeftRight, HandCoins } from "lucide-react";
+import { Camera, Check, X, AlertTriangle, Pencil, Share2, Landmark, UserPlus, LogOut, ImageIcon, Sparkles, Trash2, ArrowLeftRight, HandCoins, Copy, Undo2 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { verdictOf } from "@/lib/verdict";
 import { addGuest as addGuestByName } from "@/lib/guests";
@@ -1040,11 +1040,16 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "wi
 // Admin: change cashier, add a player mid-night
 // ---------------------------------------------------------------------------
 export function AdminSheet({
-  open, onClose, night, players, members, requests = [], onHandover, onCashout,
+  open, onClose, night, players, members, requests = [], onHandover, onCashout, table, onBackToSignup, onDelete, onRename,
 }: {
   open: boolean; onClose: () => void; night: GameNight; players: NightPlayer[]; members: Member[]; requests?: ChipRequest[];
   onHandover: () => void; onCashout: (memberId: string) => void;
+  table?: PokerTable | null; onBackToSignup?: () => void; onDelete?: () => void; onRename?: () => void;
 }) {
+  const [copied, setCopied] = useState(false);
+  const inviteLink = table && typeof window !== "undefined" ? `${location.origin}/join/${table.code}` : "";
+  const inviteText = table ? `ערב פוקר עכשיו בשולחן "${table.name}" 🃏 נכנסים עם גוגל דרך הקישור ומצטרפים: ${inviteLink}` : "";
+  const handedOut = requests.some((r) => r.status === "approved" || r.status === "flagged");
   const outside = members.filter((m) => m.status === "active" && !players.some((p) => p.member_id === m.id));
   const playing = players.filter((p) => p.status === "playing");
   const [guest, setGuest] = useState("");
@@ -1107,6 +1112,31 @@ export function AdminSheet({
   return (
     <Sheet open={open} onClose={onClose} title="ניהול הערב">
       <div className="space-y-6">
+        {table && (
+          <section>
+            <h3 className="mb-2 text-sm font-bold text-muted">הזמנת חברים לערב</h3>
+            <div className="flex gap-2">
+              <a href={`https://wa.me/?text=${encodeURIComponent(inviteText)}`} target="_blank" rel="noreferrer" className="flex-1">
+                <Button className="w-full" variant="soft">
+                  <Share2 className="size-4" /> הזמנה בוואטסאפ
+                </Button>
+              </a>
+              <Button
+                variant="soft"
+                aria-label="העתקת קישור הזמנה"
+                onClick={async () => {
+                  await navigator.clipboard?.writeText(inviteLink);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                }}
+              >
+                {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-muted">מי שנכנס מהקישור מצטרף לשולחן ומופיע למטה ב&quot;הוספת שחקן באמצע הערב&quot;.</p>
+          </section>
+        )}
+
         <section>
           <h3 className="mb-2 text-sm font-bold text-muted">{hasCashier ? "קופאי" : "מינוי קופאי"}</h3>
           {hasCashier && (
@@ -1198,6 +1228,76 @@ export function AdminSheet({
           )}
         </section>
         {err && <p className="text-sm text-loss">{err}</p>}
+
+        {(onBackToSignup || onDelete) && (
+          <section className="space-y-2 border-t border-line pt-4">
+            <h3 className="text-sm font-bold text-muted">שינוי תוכניות</h3>
+            {onRename && (
+              <Button className="w-full" variant="soft" onClick={onRename}>
+                <Pencil className="size-4" /> {night.name ? `שם הערב: ${night.name}` : "מתן שם לערב"}
+              </Button>
+            )}
+            {onBackToSignup && (
+              <>
+                <Button className="w-full" variant="soft" disabled={handedOut} onClick={onBackToSignup}>
+                  <Undo2 className="size-4" /> חזרה לשלב ההרשמה
+                </Button>
+                <p className="text-xs text-muted">
+                  {handedOut
+                    ? "כבר חולקו צ'יפים בערב הזה, אז אי אפשר לחזור להרשמה. אפשר לסיים אותו או למחוק אותו."
+                    : "הערב מתבטל ונפתחת שוב ההרשמה עם כל השחקנים במקומות שלהם וההגדרות של הערב."}
+                </p>
+              </>
+            )}
+            {onDelete && (
+              <Button className="w-full" variant="danger" onClick={onDelete}>
+                <Trash2 className="size-4" /> מחיקת הערב
+              </Button>
+            )}
+          </section>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+/** Confirms deleting a night (running or closed): it cannot be undone. */
+export function DeleteNightSheet({
+  open, onClose, night, playersCount, settlementsCount, onConfirm,
+}: {
+  open: boolean; onClose: () => void; night: GameNight; playersCount: number; settlementsCount: number; onConfirm: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const closed = night.status === "closed";
+  return (
+    <Sheet open={open} onClose={() => !busy && onClose()} title="מחיקת הערב">
+      <div className="space-y-4">
+        <p className="text-sm">זה לא הפיך. יימחקו מהערב:</p>
+        <ul className="list-disc space-y-1 pr-5 text-sm text-muted">
+          <li>{playersCount} שחקנים, כל בקשות הצ&apos;יפים, הספירות והיומן</li>
+          {closed && <li>{settlementsCount ? `${settlementsCount} העברות כסף (חובות) של הערב, גם אם לא שולמו` : "ההתחשבנות של הערב"}</li>}
+          <li>התוצאות של הערב בסטטיסטיקה ובהיסטוריה</li>
+        </ul>
+        {err && <p className="text-sm text-loss">{err}</p>}
+        <Button
+          variant="danger"
+          size="lg"
+          className="w-full"
+          loading={busy}
+          onClick={async () => {
+            setBusy(true);
+            setErr("");
+            try {
+              await onConfirm();
+            } catch (e) {
+              setErr((e as { message?: string }).message ?? "המחיקה נכשלה");
+              setBusy(false);
+            }
+          }}
+        >
+          <Trash2 className="size-5" /> מחיקה לצמיתות
+        </Button>
       </div>
     </Sheet>
   );
@@ -1486,7 +1586,7 @@ export function Summary({
   const date = new Date(night.started_at).toLocaleDateString("he-IL", { day: "numeric", month: "numeric", year: "2-digit" });
 
   const shareText = [
-    `🃏 סיכום ערב פוקר ${date}`,
+    night.name ? `🃏 סיכום ${night.name} · ${date}` : `🃏 סיכום ערב פוקר ${date}`,
     "",
     ...ranked.map((p, i) => `${i === 0 ? "🏆" : "•"} ${nameOf(members, p.member_id)}: ${formatSigned(Number(p.net ?? 0))}`),
     ...(fee > 0 && night.host_member_id && Object.keys(food).length

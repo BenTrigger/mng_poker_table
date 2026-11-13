@@ -1,13 +1,14 @@
 "use client";
 import { use, useEffect, useMemo, useRef, useState } from "react";
-import { Landmark, HandCoins, ListChecks, Users, AlertTriangle, Activity, Hand, Check } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Landmark, HandCoins, ListChecks, Users, AlertTriangle, Activity, Hand, Check, Trash2, Spade, Pencil } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth, useNight, useTable } from "@/lib/hooks";
 import { chipRate, formatMoney, formatSigned, playerLines } from "@/lib/calc";
 import { TopBar } from "@/components/top-bar";
 import { PokerTable, type Seat } from "@/components/poker-table";
-import { Avatar, Badge, Button, Card, Spinner, Toast } from "@/components/ui";
-import { RequestSheet, CashierSheet, PlayerSheet, CloseSheet, AdminSheet, Summary, EventFeed } from "./sheets";
+import { Avatar, Badge, Button, Card, Empty, Spinner, Toast } from "@/components/ui";
+import { RequestSheet, CashierSheet, PlayerSheet, CloseSheet, AdminSheet, DeleteNightSheet, Summary, EventFeed } from "./sheets";
 import { HandoverSheet } from "./handover";
 
 export default function NightPage({ params }: { params: Promise<{ code: string; nightId: string }> }) {
@@ -15,7 +16,9 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
   const { user, loading } = useAuth();
   const t = useTable(code, user?.id);
   const n = useNight(nightId, !!t.me && t.me.status === "active");
-  const [sheet, setSheet] = useState<null | "request" | "cashier" | "close" | "admin" | "handover" | { player: string }>(null);
+  const router = useRouter();
+  const [sheet, setSheet] = useState<null | "request" | "cashier" | "close" | "admin" | "handover" | "delete" | { player: string }>(null);
+  const [leaving, setLeaving] = useState(false); // this screen deleted the night or took it back to sign-up
   const [toast, setToast] = useState<string | null>(null);
   // a player opened from the close sheet goes back to it (its counts are kept)
   const [backToClose, setBackToClose] = useState(false);
@@ -73,7 +76,51 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
     prevPending.current = pending.length;
   }, [pending, canManage, t.members]);
 
-  if (loading || t.loading || n.loading) return <Spinner />;
+  async function deleteNight() {
+    const sb = supabase();
+    // stack photos first: the storage rules look the night up
+    const { data: files } = await sb.storage.from("chip-photos").list(nightId, { limit: 1000 });
+    if (files?.length) await sb.storage.from("chip-photos").remove(files.map((f) => `${nightId}/${f.name}`));
+    setLeaving(true);
+    const { error } = await sb.rpc("delete_night", { p_night: nightId });
+    if (error) {
+      setLeaving(false);
+      throw error;
+    }
+    await t.reload();
+    router.replace(`/t/${code}`);
+  }
+
+  async function renameNight() {
+    const v = prompt("שם הערב (נפרד משם השולחן)", n.night?.name ?? "");
+    if (v === null) return;
+    const { error } = await supabase().from("game_nights").update({ name: v.trim().slice(0, 60) || null }).eq("id", nightId);
+    if (error) flash("לא הצלחתי לשמור את השם");
+    else n.reload();
+  }
+
+  async function backToSignup() {
+    if (!confirm("לחזור לשלב ההרשמה? הערב יבוטל, וההרשמה תיפתח שוב עם כל השחקנים וההגדרות של הערב.")) return;
+    setLeaving(true);
+    const { data, error } = await supabase().rpc("night_back_to_signup", { p_night: nightId });
+    if (error || !data) {
+      setLeaving(false);
+      flash(error?.message.includes("chips already") ? "כבר חולקו צ'יפים, אי אפשר לחזור להרשמה" : "לא הצלחתי לחזור להרשמה, נסה שוב");
+      return;
+    }
+    router.replace(`/s/${data}`);
+  }
+
+  if (loading || t.loading || n.loading || leaving) return <Spinner />;
+  if (!night && me) {
+    return (
+      <main className="mx-auto max-w-lg p-6">
+        <Empty icon={<Spade className="size-7" />} title="הערב הזה כבר לא קיים" text="המנהל מחק אותו או החזיר אותו לשלב ההרשמה.">
+          <Button variant="soft" onClick={() => router.push(`/t/${code}`)}>חזרה לשולחן</Button>
+        </Empty>
+      </main>
+    );
+  }
   if (!night || !me) return <Spinner />;
 
   const rate = chipRate(night);
@@ -109,7 +156,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
     <>
       <Toast text={toast} />
       <TopBar
-        title={closed ? `סיכום ערב · ${dateStr}` : `ערב ${dateStr}`}
+        title={night.name ? (closed ? `סיכום · ${night.name}` : night.name) : closed ? `סיכום ערב · ${dateStr}` : `ערב ${dateStr}`}
         sub={`${Number(night.chips_per_buyin).toLocaleString()} צ'יפים = ${formatMoney(Number(night.money_per_buyin))} · קופאי: ${cashierName}`}
         back={`/t/${code}`}
         right={
@@ -117,6 +164,15 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
             <button className="flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1.5 text-xs font-bold" onClick={() => setSheet("admin")} aria-label="ניהול הערב">
               <Users className="size-4" /> שחקנים וקופאי
             </button>
+          ) : t.isAdmin && closed ? (
+            <div className="flex gap-1.5">
+              <button className="grid size-9 place-items-center rounded-full bg-surface-2 text-muted" onClick={renameNight} aria-label="שם הערב" title="שם הערב">
+                <Pencil className="size-4" />
+              </button>
+              <button className="grid size-9 place-items-center rounded-full bg-surface-2 text-loss" onClick={() => setSheet("delete")} aria-label="מחיקת הערב" title="מחיקת הערב">
+                <Trash2 className="size-4" />
+              </button>
+            </div>
           ) : undefined
         }
       />
@@ -296,7 +352,23 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
         />
       )}
       <CloseSheet open={sheet === "close"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} pendingCount={pending.length + flagged.length} flaggedCount={flagged.length} handovers={n.handovers} table={t.table!} onPlayer={(id) => { setBackToClose(true); setSheet({ player: id }); }} />
-      <AdminSheet open={sheet === "admin"} onClose={() => setSheet(null)} night={night} players={n.players} members={t.members} requests={n.requests} onHandover={() => setSheet("handover")} onCashout={(id) => setSheet({ player: id })} />
+      <AdminSheet
+        open={sheet === "admin"}
+        onClose={() => setSheet(null)}
+        night={night}
+        players={n.players}
+        members={t.members}
+        requests={n.requests}
+        onHandover={() => setSheet("handover")}
+        onCashout={(id) => setSheet({ player: id })}
+        table={t.table}
+        onBackToSignup={backToSignup}
+        onDelete={() => setSheet("delete")}
+        onRename={renameNight}
+      />
+      {t.isAdmin && (
+        <DeleteNightSheet open={sheet === "delete"} onClose={() => setSheet(null)} night={night} playersCount={n.players.length} settlementsCount={n.settlements.length} onConfirm={deleteNight} />
+      )}
       <HandoverSheet open={sheet === "handover"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} handovers={n.handovers} />
     </>
   );

@@ -75,6 +75,8 @@ export type ChipSet = {
 export type GameNight = {
   id: string;
   table_id: string;
+  /** the night's own name, apart from the table's */
+  name?: string | null;
   status: "open" | "closed";
   chip_set_id: string | null;
   chips_per_buyin: number;
@@ -185,6 +187,8 @@ export type CashierHandover = {
 export type Signup = {
   id: string;
   table_id: string;
+  /** the night's own name ("השישי ה-13"), apart from the table's */
+  name?: string | null;
   starts_at: string;
   location: string | null;
   address: string | null;
@@ -194,6 +198,17 @@ export type Signup = {
   night_id: string | null;
   created_by: string | null;
   created_at: string;
+  /** the night's settings chosen on the sign-up; the new-night screen starts from them */
+  settings?: SignupSettings | null;
+};
+
+export type SignupSettings = {
+  chip_set_id?: string;
+  chips_per_buyin?: number;
+  money_per_buyin?: number;
+  cashier_member_id?: string;
+  food_fee?: number;
+  host_member_id?: string;
 };
 
 /** A seat (or waiting-list spot when seat is null) as returned by get_signup() */

@@ -8,8 +8,9 @@ import { useAuth, useTable, logEvent } from "@/lib/hooks";
 import { TopBar } from "@/components/top-bar";
 import { Avatar, Button, Card, ChipDot, Field, Sheet, Spinner, inputCls } from "@/components/ui";
 import { ChipSetEditor } from "@/components/chip-set-editor";
+import { ChipSetImport } from "@/components/chip-set-import";
 import { formatMoney } from "@/lib/calc";
-import type { Chip, ChipSet } from "@/lib/types";
+import type { Chip, ChipSet, SignupSettings } from "@/lib/types";
 import { DEFAULT_CHIPS } from "@/lib/chips";
 
 const MAX_PLAYERS = 10;
@@ -21,6 +22,7 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
   const t = useTable(code, user?.id);
 
   const [chipSetId, setChipSetId] = useState<string>("");
+  const [nightName, setNightName] = useState("");
   const [chipsPer, setChipsPer] = useState(1000);
   const [moneyPer, setMoneyPer] = useState(100);
   const [selected, setSelected] = useState<string[]>([]);
@@ -58,21 +60,33 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
   useEffect(() => {
     const id = new URLSearchParams(location.search).get("signup");
     if (!id || !init) return;
-    supabase()
-      .from("signup_seats")
-      .select("member_id, seat")
-      .eq("signup_id", id)
-      .not("seat", "is", null)
-      .order("seat")
-      .then(({ data }) => {
-        if (!data?.length) return;
-        setSignupId(id);
-        const ids = data.map((r) => r.member_id as string).slice(0, MAX_PLAYERS);
-        setSelected(ids);
-        setCashier((c) => (ids.includes(c) ? c : ""));
-        // the opener was the default host only because they were on the list; keep a remembered host
-        setHost((h) => (ids.includes(h) || h === rememberedHost.current ? h : ""));
-      });
+    (async () => {
+      const sb = supabase();
+      // the night's settings the admin chose on the sign-up
+      const { data: su } = await sb.from("signups").select("settings, name").eq("id", id).single();
+      if (su?.name) setNightName(su.name);
+      const st = (su?.settings ?? null) as SignupSettings | null;
+      if (st) {
+        if (st.chip_set_id && t.chipSets.some((c) => c.id === st.chip_set_id)) setChipSetId(st.chip_set_id);
+        if (st.chips_per_buyin) setChipsPer(st.chips_per_buyin);
+        if (st.money_per_buyin) setMoneyPer(st.money_per_buyin);
+        if (st.food_fee != null) setFoodFee(st.food_fee);
+        if (st.host_member_id) rememberedHost.current = st.host_member_id;
+      }
+      // the seated players play, in their seat order
+      const { data } = await sb.from("signup_seats").select("member_id, seat").eq("signup_id", id).not("seat", "is", null).order("seat");
+      if (!data?.length) return;
+      setSignupId(id);
+      const ids = data.map((r) => r.member_id as string).slice(0, MAX_PLAYERS);
+      // the cashier chosen on the sign-up plays tonight even if they did not take a seat
+      const sc = st?.cashier_member_id;
+      if (sc && !ids.includes(sc) && ids.length < MAX_PLAYERS) ids.push(sc);
+      setSelected(ids);
+      setCashier((c) => (sc && ids.includes(sc) ? sc : ids.includes(c) ? c : ""));
+      // the opener was the default host only because they were on the list; keep a remembered host
+      setHost((h) => (st?.host_member_id ? st.host_member_id : ids.includes(h) || h === rememberedHost.current ? h : ""));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once, when the screen is ready
   }, [init]);
 
   if (loading || t.loading || !t.table) return <Spinner />;
@@ -134,6 +148,7 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
       .from("game_nights")
       .insert({
         table_id: t.table!.id,
+        name: nightName.trim().slice(0, 60) || null,
         chip_set_id: setId,
         chips_per_buyin: chipsPer,
         money_per_buyin: moneyPer,
@@ -172,6 +187,12 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
             השחקנים והמקומות נטענו מההרשמה המוקדמת ({selected.length} רשומים). אפשר לשנות לפני הפתיחה.
           </Card>
         )}
+        <section>
+          <Field label="שם הערב (לא חובה)" hint="נפרד משם השולחן. מופיע בערב ובהיסטוריה.">
+            <input className={inputCls} placeholder="השישי ה-13" maxLength={60} value={nightName} onChange={(e) => setNightName(e.target.value)} />
+          </Field>
+        </section>
+
         <section>
           <h2 className="mb-2 px-1 text-sm font-bold text-muted">ערכת צ'יפים</h2>
           <div className="space-y-2">
@@ -218,11 +239,20 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
                 </button>
               </Card>
             ))}
-            {t.chipSets.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={() => setEditing("new")}>
-                <Plus className="size-4" /> החלפנו ערכה? הגדר חדשה
-              </Button>
-            )}
+            <div className="flex flex-wrap gap-1">
+              {t.chipSets.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={() => setEditing("new")}>
+                  <Plus className="size-4" /> החלפנו ערכה? הגדר חדשה
+                </Button>
+              )}
+              <ChipSetImport
+                tableId={t.table.id}
+                onImported={async (set) => {
+                  await t.reload();
+                  setChipSetId(set.id);
+                }}
+              />
+            </div>
           </div>
         </section>
 

@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Plus, Share2, Mail, Check, X, Crown, Trash2, UserPlus, Copy, CalendarDays, ChevronLeft, Trophy, Flame, TrendingDown, Coins, Spade, Pencil, Link2,
 } from "lucide-react";
@@ -11,6 +12,7 @@ import type { Member, NightPlayer, Profile, Settlement, PokerTable, ChipSet } fr
 import { formatMoney, formatSigned, memberStats } from "@/lib/calc";
 import { Avatar, Badge, Button, Card, ChipDot, Empty, Field, Sheet, inputCls } from "@/components/ui";
 import { ChipSetEditor } from "@/components/chip-set-editor";
+import { ChipSetImport } from "@/components/chip-set-import";
 import { UpcomingSignups } from "@/components/signup-section";
 import { TournamentsSection } from "@/components/tournament-section";
 import { TournamentStatsView } from "@/components/tournament-stats";
@@ -24,11 +26,11 @@ const nameOf = (members: Member[], id: string) => members.find((m) => m.id === i
 const dateStr = (s: string) => new Date(s).toLocaleDateString("he-IL", { weekday: "short", day: "numeric", month: "numeric", year: "2-digit" });
 
 function useTableSettlements(ctx: Ctx) {
-  const [rows, setRows] = useState<(Settlement & { game_nights: { started_at: string } })[]>([]);
+  const [rows, setRows] = useState<(Settlement & { game_nights: { started_at: string; name: string | null } })[]>([]);
   const ids = ctx.nights.filter((n) => n.status === "closed").map((n) => n.id).join(",");
   const load = useCallback(async () => {
     if (!ids) return setRows([]);
-    const { data } = await supabase().from("settlements").select("*, game_nights(started_at)").in("night_id", ids.split(","));
+    const { data } = await supabase().from("settlements").select("*, game_nights(started_at, name)").in("night_id", ids.split(","));
     setRows((data as never) ?? []);
   }, [ids]);
   useEffect(() => {
@@ -43,6 +45,7 @@ function useTableSettlements(ctx: Ctx) {
 export function NightTab({ ctx }: { ctx: Ctx }) {
   const open = ctx.nights.find((n) => n.status === "open");
   const { rows, reload } = useTableSettlements(ctx);
+  const [signupOpen, setSignupOpen] = useState(false);
   const mine = rows.filter((s) => !s.paid && (s.from_member === ctx.me.id || s.to_member === ctx.me.id));
 
   async function markPaid(id: string) {
@@ -58,7 +61,8 @@ export function NightTab({ ctx }: { ctx: Ctx }) {
             <div className="flex items-center gap-2 text-sm font-bold text-win">
               <span className="size-2 animate-pulse rounded-full bg-win" /> ערב פעיל עכשיו
             </div>
-            <div className="mt-2 font-[family-name:var(--font-display)] text-3xl font-extrabold">{dateStr(open.started_at)}</div>
+            <div className="mt-2 font-[family-name:var(--font-display)] text-3xl font-extrabold">{open.name || dateStr(open.started_at)}</div>
+            {open.name && <div className="text-sm text-white/70">{dateStr(open.started_at)}</div>}
             <div className="mt-1 text-sm text-white/70">
               כניסה: {Number(open.chips_per_buyin).toLocaleString()} צ'יפים = {formatMoney(Number(open.money_per_buyin))}
             </div>
@@ -69,12 +73,17 @@ export function NightTab({ ctx }: { ctx: Ctx }) {
         </Link>
       ) : ctx.isAdmin ? (
         <Card className="text-center">
-          <Empty icon={<Spade className="size-7" />} title="אין ערב פעיל" text="פתח ערב חדש: בוחרים שחקנים, ערכת צ'יפים, מחיר כניסה וקופאי.">
-            <Link href={`/t/${ctx.table.code}/new-night`}>
-              <Button size="lg">
-                <Plus className="size-5" /> ערב חדש
+          <Empty icon={<Spade className="size-7" />} title="אין ערב פעיל" text="קובעים ערב מראש? פתח הרשמה מוקדמת וכל אחד תופס כיסא. משחקים עכשיו? פתח ערב מיד.">
+            <div className="grid w-full gap-2">
+              <Button size="lg" className="w-full" onClick={() => setSignupOpen(true)}>
+                <CalendarDays className="size-5" /> הרשמה מוקדמת לערב
               </Button>
-            </Link>
+              <Link href={`/t/${ctx.table.code}/new-night`} className="block">
+                <Button size="lg" variant="soft" className="w-full">
+                  <Plus className="size-5" /> ערב חדש עכשיו
+                </Button>
+              </Link>
+            </div>
           </Empty>
         </Card>
       ) : (
@@ -83,7 +92,7 @@ export function NightTab({ ctx }: { ctx: Ctx }) {
         </Card>
       )}
 
-      <UpcomingSignups tableId={ctx.table.id} isAdmin={ctx.isAdmin} />
+      <UpcomingSignups tableId={ctx.table.id} isAdmin={ctx.isAdmin} lastSettings={ctx.table.last_settings} open={signupOpen} onOpenChange={setSignupOpen} />
 
       <TournamentsSection tableId={ctx.table.id} isAdmin={ctx.isAdmin} lastSettings={ctx.table.last_settings?.tournament} />
 
@@ -100,7 +109,7 @@ export function NightTab({ ctx }: { ctx: Ctx }) {
                 <Card key={s.id} className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="font-bold">{iOwe ? `אתה חייב ל${other}` : `${other} חייב לך`}</div>
-                    <div className="text-xs text-muted">ערב {dateStr(s.game_nights.started_at)}</div>
+                    <div className="text-xs text-muted">{s.game_nights.name ? `${s.game_nights.name} · ` : "ערב "}{dateStr(s.game_nights.started_at)}</div>
                   </div>
                   <div className={`num text-lg font-extrabold ${iOwe ? "text-loss" : "text-win"}`}>{formatMoney(Number(s.amount))}</div>
                   {!iOwe && (
@@ -393,7 +402,7 @@ export function HistoryTab({ ctx }: { ctx: Ctx }) {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="font-bold">
-                  {dateStr(n.started_at)} {n.status === "open" && <Badge tone="win">פעיל</Badge>}
+                  {n.name ? `${n.name} · ` : ""}{dateStr(n.started_at)} {n.status === "open" && <Badge tone="win">פעיל</Badge>}
                 </div>
                 <div className="text-xs text-muted">
                   {ps.length} שחקנים{n.status === "closed" && pot > 0 ? ` · קופה ${formatMoney(pot)}` : ""}
@@ -648,9 +657,12 @@ export function SettingsTab({ ctx }: { ctx: Ctx }) {
       <section>
         <div className="mb-2 flex items-center justify-between px-1">
           <h2 className="text-sm font-bold text-muted">ערכות צ'יפים</h2>
-          <Button size="sm" variant="ghost" onClick={() => setEditing("new")}>
-            <Plus className="size-4" /> ערכה חדשה
-          </Button>
+          <div className="flex">
+            <ChipSetImport tableId={ctx.table.id} onImported={() => ctx.reload()} />
+            <Button size="sm" variant="ghost" onClick={() => setEditing("new")}>
+              <Plus className="size-4" /> ערכה חדשה
+            </Button>
+          </div>
         </div>
         {ctx.chipSets.length === 0 ? (
           <Card className="space-y-3 text-center text-sm text-muted">
@@ -682,6 +694,8 @@ export function SettingsTab({ ctx }: { ctx: Ctx }) {
         )}
       </section>
 
+      {ctx.table.owner_id === ctx.userId && <DeleteTable ctx={ctx} />}
+
       <Sheet open={!!editing} onClose={() => setEditing(null)} title={editing === "new" ? "ערכה חדשה" : "עריכת ערכה"}>
         {editing && (
           <ChipSetEditor
@@ -696,5 +710,64 @@ export function SettingsTab({ ctx }: { ctx: Ctx }) {
         )}
       </Sheet>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Delete the whole table (only whoever created it). Cannot be undone.
+// ---------------------------------------------------------------------------
+function DeleteTable({ ctx }: { ctx: Ctx }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const name = ctx.table.name.trim();
+
+  async function remove() {
+    setBusy(true);
+    setErr("");
+    const sb = supabase();
+    try {
+      // stored photos first: the storage rules look up the table and its nights
+      const { data: refs } = await sb.storage.from("chip-refs").list(ctx.table.id, { limit: 1000 });
+      if (refs?.length) await sb.storage.from("chip-refs").remove(refs.map((f) => `${ctx.table.id}/${f.name}`));
+      for (const n of ctx.nights.filter((x) => x.status === "open")) {
+        const { data: files } = await sb.storage.from("chip-photos").list(n.id, { limit: 1000 });
+        if (files?.length) await sb.storage.from("chip-photos").remove(files.map((f) => `${n.id}/${f.name}`));
+      }
+      const { error } = await sb.rpc("delete_table", { p_table: ctx.table.id });
+      if (error) throw error;
+      router.replace("/tables");
+    } catch (e) {
+      setErr((e as { message?: string }).message ?? "המחיקה נכשלה");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section>
+      <h2 className="mb-2 px-1 text-sm font-bold text-loss">אזור מסוכן</h2>
+      <Card className="space-y-3 border-loss/40">
+        <p className="text-sm text-muted">מחיקת השולחן מוחקת לצמיתות את כל הערבים, הטורנירים, ההרשמות, החובות, הסטטיסטיקה וערכות הצ&apos;יפים שלו. כל השחקנים יאבדו אליו גישה.</p>
+        <Button variant="danger" onClick={() => { setTyped(""); setErr(""); setOpen(true); }}>
+          <Trash2 className="size-4" /> מחיקת השולחן
+        </Button>
+      </Card>
+      <Sheet open={open} onClose={() => !busy && setOpen(false)} title="מחיקת השולחן">
+        <div className="space-y-4">
+          <p className="text-sm">
+            זה לא הפיך. יימחקו {ctx.nights.length} ערבים, כל החובות והסטטיסטיקה, וכל {ctx.members.length} החברים יאבדו גישה לשולחן.
+          </p>
+          <Field label={`כדי לאשר, הקלד את שם השולחן: ${name}`}>
+            <input className={inputCls} value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={name} />
+          </Field>
+          {err && <p className="text-sm text-loss">{err}</p>}
+          <Button variant="danger" size="lg" className="w-full" disabled={typed.trim() !== name} loading={busy} onClick={remove}>
+            <Trash2 className="size-5" /> מחיקה לצמיתות
+          </Button>
+        </div>
+      </Sheet>
+    </section>
   );
 }
