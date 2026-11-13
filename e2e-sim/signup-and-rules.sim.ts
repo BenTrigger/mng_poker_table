@@ -274,7 +274,7 @@ test("invites, early sign-up with seats, table rules and permissions", async ({ 
     await dor.page.goto(nightUrl);
     await expect(dor.page.getByText(/סיכום ערב/)).toBeVisible();
     const summary = dor.page.locator("main div.divide-y").first();
-    await expect(summary.locator("> div")).toHaveCount(1);
+    await expect(summary.locator("> *")).toHaveCount(1);
     await expect(summary).toContainText("דור");
     await expect(btn(dor.page, "שיתוף הסיכום לוואטסאפ")).toHaveCount(0);
     await dor.page.goto(`/t/${code}?tab=stats`);
