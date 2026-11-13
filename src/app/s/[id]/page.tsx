@@ -297,6 +297,8 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
             </Card>
           </section>
         )}
+
+        {(isAdmin || s.created_by === user?.id) && <SignupLog signupId={s.id} rev={seats} />}
       </main>
 
       {(s.status === "open" || s.status === "closed") && (
@@ -646,5 +648,80 @@ function NightSettingsCard({
         )}
       </Sheet>
     </>
+  );
+}
+
+type SignupEvent = {
+  id: number;
+  member_id: string | null;
+  member_name: string;
+  kind: "seat" | "wait" | "move" | "up" | "to_wait" | "left";
+  seat: number | null;
+  from_seat: number | null;
+  actor_id: string | null;
+  actor_name: string | null;
+  created_at: string;
+};
+
+function eventText(e: SignupEvent) {
+  switch (e.kind) {
+    case "seat": return `התיישב במקום ${e.seat}`;
+    case "wait": return "נכנס לרשימת ההמתנה";
+    case "move": return `עבר ממקום ${e.from_seat} למקום ${e.seat}`;
+    case "up": return `עלה מההמתנה למקום ${e.seat}`;
+    case "to_wait": return `עבר ממקום ${e.from_seat} לרשימת ההמתנה`;
+    case "left": return e.seat ? `ביטל (פינה את מקום ${e.seat})` : "יצא מרשימת ההמתנה";
+  }
+}
+
+/** Seat log at the bottom of the sign-up, for whoever opened it and the table admins */
+function SignupLog({ signupId, rev }: { signupId: string; rev: unknown }) {
+  const [rows, setRows] = useState<SignupEvent[]>([]);
+  const [all, setAll] = useState(false);
+  useEffect(() => {
+    supabase()
+      .from("signup_events")
+      .select("*")
+      .eq("signup_id", signupId)
+      .order("id", { ascending: false })
+      .limit(200)
+      .then(({ data }) => setRows((data as SignupEvent[]) ?? []));
+  }, [signupId, rev]);
+
+  const shown = all ? rows : rows.slice(0, 8);
+  const when = (t: string) => {
+    const d = new Date(t);
+    const today = d.toDateString() === new Date().toDateString();
+    return today
+      ? d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })
+      : d.toLocaleString("he-IL", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" });
+  };
+
+  return (
+    <section>
+      <div className="mb-2 flex items-center justify-between px-1">
+        <h2 className="text-sm font-bold text-muted">יומן ההרשמה</h2>
+        {rows.length > 8 && (
+          <button className="text-xs font-bold text-gold" onClick={() => setAll((x) => !x)}>
+            {all ? "רק האחרונות" : `הצג הכל (${rows.length})`}
+          </button>
+        )}
+      </div>
+      <Card className="space-y-1.5 p-3">
+        {rows.length === 0 && <p className="text-center text-xs text-muted">עוד אין פעולות. כל הרשמה, מעבר כיסא וביטול יופיעו כאן.</p>}
+        {shown.map((e) => {
+          const byOther = e.actor_name && e.actor_name !== e.member_name;
+          return (
+            <div key={e.id} className="flex gap-2 text-xs">
+              <span className="num shrink-0 text-muted">{when(e.created_at)}</span>
+              <span className={e.kind === "left" ? "text-loss" : e.kind === "seat" || e.kind === "up" ? "text-win" : ""}>
+                <b>{e.member_name}</b> {eventText(e)}
+                {byOther && <span className="text-muted"> · על ידי {e.actor_name}</span>}
+              </span>
+            </div>
+          );
+        })}
+      </Card>
+    </section>
   );
 }
