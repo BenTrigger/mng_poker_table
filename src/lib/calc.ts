@@ -206,3 +206,61 @@ export function memberStats(
     .map((s) => ({ ...s, avg: round2(s.total / s.nights) }))
     .sort((a, b) => b.total - a.total);
 }
+
+/**
+ * Food fee: every player of the night pays `fee` to the host, except the host.
+ * Separate from the chips (not part of the pot, not part of anyone's poker
+ * result): it only changes who transfers what at the end.
+ * Returns money per member: negative = pays, positive = receives.
+ */
+export function foodCharges(playerIds: string[], fee: number, hostId: string | null | undefined): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!(fee > 0) || !hostId) return out;
+  const payers = playerIds.filter((id) => id !== hostId);
+  if (!payers.length) return out;
+  for (const id of payers) out[id] = -round2(fee);
+  out[hostId] = round2(fee * payers.length);
+  return out;
+}
+
+export type ResultRow = {
+  id: string;
+  /** "out" left mid-night (result fixed by their own count), "playing" counted at the end */
+  status: NightPlayer["status"];
+  finalChips: number;
+  boughtMoney: number;
+};
+
+export type NightResult = {
+  /** poker result per player, the end-of-night gap spread over the stacks still at the table */
+  poker: { id: string; net: number }[];
+  /** food fee per member (see foodCharges) */
+  food: Record<string, number>;
+  /** what each member gets (+) or pays (-) at the end: poker result plus food */
+  nets: { id: string; net: number }[];
+  transfers: Transfer[];
+};
+
+/**
+ * The whole end-of-night calculation, used when closing the night and again
+ * whenever a count, a purchase or the food fee is corrected afterwards.
+ */
+export function nightResult(
+  rows: ResultRow[],
+  rate: number,
+  opts: { foodFee?: number; hostId?: string | null; mode?: SettleMode; cashierId?: string | null } = {},
+): NightResult {
+  const raw = (r: ResultRow) => round2(chipsToMoney(r.finalChips, rate) - r.boughtMoney);
+  const out = rows.filter((r) => r.status === "out");
+  const live = rows.filter((r) => r.status !== "out");
+  const fixedTotal = out.reduce((s, r) => s + raw(r), 0);
+  const poker = [
+    ...balanceNets(live.map((r) => ({ id: r.id, net: raw(r), finalChips: r.finalChips })), live.length ? fixedTotal : 0),
+    ...out.map((r) => ({ id: r.id, net: raw(r) })),
+  ];
+  const food = foodCharges(rows.map((r) => r.id), opts.foodFee ?? 0, opts.hostId);
+  const ids = new Set([...poker.map((p) => p.id), ...Object.keys(food)]);
+  const nets = [...ids].map((id) => ({ id, net: round2((poker.find((p) => p.id === id)?.net ?? 0) + (food[id] ?? 0)) }));
+  const hub = opts.mode === "cashier" && opts.cashierId ? opts.cashierId : null;
+  return { poker, food, nets, transfers: hub ? settleViaHub(nets, hub) : settle(nets) };
+}

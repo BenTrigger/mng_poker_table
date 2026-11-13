@@ -1,5 +1,5 @@
 "use client";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Landmark, Pencil, Plus, UserPlus } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -25,6 +25,10 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
   const [moneyPer, setMoneyPer] = useState(100);
   const [selected, setSelected] = useState<string[]>([]);
   const [cashier, setCashier] = useState<string>("");
+  // food: every player except the host pays the host, apart from the chips (Ben's table: ₪50)
+  const [foodFee, setFoodFee] = useState(50);
+  const [host, setHost] = useState<string>("");
+  const rememberedHost = useRef<string | undefined>(undefined);
   const [editing, setEditing] = useState<ChipSet | "new" | null>(null);
   const [guest, setGuest] = useState("");
   const [busy, setBusy] = useState(false);
@@ -39,10 +43,15 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
     setChipSetId(ls.chip_set_id && t.chipSets.some((c) => c.id === ls.chip_set_id) ? ls.chip_set_id : t.chipSets[0]?.id ?? "");
     if (ls.chips_per_buyin) setChipsPer(ls.chips_per_buyin);
     if (ls.money_per_buyin) setMoneyPer(ls.money_per_buyin);
-    setSelected((ls.member_ids?.filter((id) => active.includes(id)) ?? active).slice(0, MAX_PLAYERS));
+    const sel = (ls.member_ids?.filter((id) => active.includes(id)) ?? active).slice(0, MAX_PLAYERS);
+    setSelected(sel);
     if (ls.cashier_member_id && active.includes(ls.cashier_member_id)) setCashier(ls.cashier_member_id);
+    if (ls.food_fee != null) setFoodFee(ls.food_fee);
+    rememberedHost.current = ls.host_member_id;
+    // the last host again, or whoever opens the night when they play tonight
+    setHost(ls.host_member_id && active.includes(ls.host_member_id) ? ls.host_member_id : t.me && sel.includes(t.me.id) ? t.me.id : "");
     setInit(true);
-  }, [t.table, t.members, t.chipSets, init]);
+  }, [t.table, t.members, t.chipSets, init, t.me]);
 
   // opened from an early sign-up: the seated players play, in their seat order
   const [signupId, setSignupId] = useState<string | null>(null);
@@ -61,6 +70,8 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
         const ids = data.map((r) => r.member_id as string).slice(0, MAX_PLAYERS);
         setSelected(ids);
         setCashier((c) => (ids.includes(c) ? c : ""));
+        // the opener was the default host only because they were on the list; keep a remembered host
+        setHost((h) => (ids.includes(h) || h === rememberedHost.current ? h : ""));
       });
   }, [init]);
 
@@ -128,6 +139,8 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
         money_per_buyin: moneyPer,
         cashier_member_id: cashier || null,
         created_by: user!.id,
+        food_fee: foodFee,
+        host_member_id: host || null,
       })
       .select()
       .single();
@@ -141,10 +154,10 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
     await sb.from("night_players").insert(selected.map((member_id, seat) => ({ night_id: night.id, member_id, seat, arrived_at: here.has(member_id) ? now : null })));
     await sb
       .from("poker_tables")
-      .update({ last_settings: { ...(t.table!.last_settings ?? {}), chip_set_id: setId, chips_per_buyin: chipsPer, money_per_buyin: moneyPer, cashier_member_id: cashier, member_ids: selected } })
+      .update({ last_settings: { ...(t.table!.last_settings ?? {}), chip_set_id: setId, chips_per_buyin: chipsPer, money_per_buyin: moneyPer, cashier_member_id: cashier, member_ids: selected, food_fee: foodFee, host_member_id: host || undefined } })
       .eq("id", t.table!.id);
     if (signupId) await sb.from("signups").update({ status: "started", night_id: night.id }).eq("id", signupId);
-    await logEvent(night.id, "night_opened", { players: selected.length, chips_per_buyin: chipsPer, money_per_buyin: moneyPer, cashier });
+    await logEvent(night.id, "night_opened", { players: selected.length, chips_per_buyin: chipsPer, money_per_buyin: moneyPer, cashier, food_fee: foodFee, host: host || null });
     router.replace(`/t/${code}/n/${night.id}`);
   }
 
@@ -224,6 +237,30 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
             </Field>
             <p className="col-span-2 text-xs text-muted">
               כל צ'יפ שווה {chipsPer ? formatMoney(moneyPer / chipsPer) : "—"}. שחקנים יוכלו לבקש לפי צ'יפים או לפי סכום.
+            </p>
+          </Card>
+        </section>
+
+        <section>
+          <h2 className="mb-2 px-1 text-sm font-bold text-muted">🍽️ דמי אוכל</h2>
+          <Card className="grid grid-cols-2 gap-3">
+            <Field label="לשחקן (₪)">
+              <input className={inputCls} inputMode="decimal" value={foodFee || ""} placeholder="0" onChange={(e) => setFoodFee(Number(e.target.value.replace(/[^\d.]/g, "")) || 0)} />
+            </Field>
+            <Field label="מארח (לא משלם)">
+              <select className={inputCls} value={host} onChange={(e) => setHost(e.target.value)}>
+                <option value="">בלי מארח</option>
+                {active.map((m) => (
+                  <option key={m.id} value={m.id}>{m.display_name}</option>
+                ))}
+              </select>
+            </Field>
+            <p className="col-span-2 text-xs text-muted">
+              {foodFee > 0 && host
+                ? `כל שחקן חוץ מהמארח משלם ${formatMoney(foodFee)} למארח. נפרד מהצ'יפים, נכנס רק להתחשבנות בסוף. אפשר לשנות גם במהלך הערב.`
+                : foodFee > 0
+                  ? "בחר מארח: הוא מקבל את דמי האוכל."
+                  : "בלי דמי אוכל הערב."}
             </p>
           </Card>
         </section>
