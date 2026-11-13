@@ -1,5 +1,5 @@
 "use client";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Landmark, Pencil, Plus, UserPlus } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -28,6 +28,7 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
   // food: every player except the host pays the host, apart from the chips (Ben's table: ₪50)
   const [foodFee, setFoodFee] = useState(50);
   const [host, setHost] = useState<string>("");
+  const rememberedHost = useRef<string | undefined>(undefined);
   const [editing, setEditing] = useState<ChipSet | "new" | null>(null);
   const [guest, setGuest] = useState("");
   const [busy, setBusy] = useState(false);
@@ -46,6 +47,7 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
     setSelected(sel);
     if (ls.cashier_member_id && active.includes(ls.cashier_member_id)) setCashier(ls.cashier_member_id);
     if (ls.food_fee != null) setFoodFee(ls.food_fee);
+    rememberedHost.current = ls.host_member_id;
     // the last host again, or whoever opens the night when they play tonight
     setHost(ls.host_member_id && active.includes(ls.host_member_id) ? ls.host_member_id : t.me && sel.includes(t.me.id) ? t.me.id : "");
     setInit(true);
@@ -68,6 +70,8 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
         const ids = data.map((r) => r.member_id as string).slice(0, MAX_PLAYERS);
         setSelected(ids);
         setCashier((c) => (ids.includes(c) ? c : ""));
+        // the opener was the default host only because they were on the list; keep a remembered host
+        setHost((h) => (ids.includes(h) || h === rememberedHost.current ? h : ""));
       });
   }, [init]);
 
