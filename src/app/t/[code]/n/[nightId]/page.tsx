@@ -17,6 +17,8 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
   const n = useNight(nightId, !!t.me && t.me.status === "active");
   const [sheet, setSheet] = useState<null | "request" | "cashier" | "close" | "admin" | "handover" | { player: string }>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // a player opened from the close sheet goes back to it (its counts are kept)
+  const [backToClose, setBackToClose] = useState(false);
   const [requestFor, setRequestFor] = useState<string | null>(null); // admin/cashier asked for chips on a player's behalf
   const [showFeed, setShowFeed] = useState(false);
 
@@ -138,7 +140,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
         />
 
         {closed ? (
-          <Summary night={night} players={n.players} lines={lines} settlements={n.settlements} members={t.members} meId={me.id} isAdmin={t.isAdmin} reload={n.reload} seeAll={seeAll} />
+          <Summary night={night} players={n.players} lines={lines} settlements={n.settlements} members={t.members} meId={me.id} isAdmin={t.isAdmin} reload={n.reload} seeAll={seeAll} requests={n.requests} table={t.table} onPlayer={(id) => setSheet({ player: id })} />
         ) : (
           <>
             {t.isAdmin && flagged.length > 0 && (
@@ -248,7 +250,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
               </Button>
             ) : (myLine?.status === "playing" || canManage) && (
               <Button size="lg" className="min-w-0 flex-1 px-3!" onClick={() => { setRequestFor(null); setSheet("request"); }}>
-                <HandCoins className="size-5" /> בקשת צ'יפים
+                <HandCoins className="size-5" /> {canManage ? "רישום צ'יפים" : "בקשת צ'יפים"}
               </Button>
             )}
             {canManage && (
@@ -274,7 +276,14 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
       <CashierSheet open={sheet === "cashier"} onClose={() => setSheet(null)} night={night} requests={n.requests} members={t.members} chipSet={chipSet} isAdmin={t.isAdmin} onHandover={() => setSheet("handover")} />
       {typeof sheet === "object" && sheet && "player" in sheet && (
         <PlayerSheet
-          onClose={() => setSheet(null)}
+          key={sheet.player}
+          onClose={() => {
+            setSheet(backToClose ? "close" : null);
+            setBackToClose(false);
+          }}
+          isAdmin={t.isAdmin}
+          settlements={n.settlements}
+          table={t.table}
           night={night}
           memberId={sheet.player}
           players={n.players}
@@ -286,7 +295,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
           onRequest={open ? () => { setRequestFor(sheet.player); setSheet("request"); } : undefined}
         />
       )}
-      <CloseSheet open={sheet === "close"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} pendingCount={pending.length + flagged.length} flaggedCount={flagged.length} handovers={n.handovers} table={t.table!} />
+      <CloseSheet open={sheet === "close"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} pendingCount={pending.length + flagged.length} flaggedCount={flagged.length} handovers={n.handovers} table={t.table!} onPlayer={(id) => { setBackToClose(true); setSheet({ player: id }); }} />
       <AdminSheet open={sheet === "admin"} onClose={() => setSheet(null)} night={night} players={n.players} members={t.members} requests={n.requests} onHandover={() => setSheet("handover")} onCashout={(id) => setSheet({ player: id })} />
       <HandoverSheet open={sheet === "handover"} onClose={() => setSheet(null)} night={night} players={n.players} lines={lines} members={t.members} chipSet={chipSet} handovers={n.handovers} />
     </>

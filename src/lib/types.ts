@@ -44,6 +44,9 @@ export type LastSettings = {
   member_ids?: string[];
   /** how the night's debts are settled: minimal transfers between players, or all through the cashier */
   settle_mode?: "players" | "cashier";
+  /** food fee per player for the next night, and who usually hosts */
+  food_fee?: number;
+  host_member_id?: string;
   /** "all": everyone sees everyone's results; "own": players see only their own (admins see all) */
   stats_visibility?: "all" | "own";
   /** the last tournament format, offered again for the next tournament */
@@ -81,6 +84,11 @@ export type GameNight = {
   started_at: string;
   closed_at: string | null;
   photos_purged: boolean;
+  /** money each player except the host pays the host for food, apart from the chips */
+  food_fee?: number | null;
+  host_member_id?: string | null;
+  /** how the transfers were settled at the close (kept so corrections settle the same way) */
+  settle_mode?: "players" | "cashier" | null;
 };
 
 export type NightPlayer = {
