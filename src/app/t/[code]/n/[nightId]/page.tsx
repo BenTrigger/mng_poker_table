@@ -250,7 +250,7 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
               </Button>
             ) : (myLine?.status === "playing" || canManage) && (
               <Button size="lg" className="min-w-0 flex-1 px-3!" onClick={() => { setRequestFor(null); setSheet("request"); }}>
-                <HandCoins className="size-5" /> בקשת צ'יפים
+                <HandCoins className="size-5" /> {canManage ? "רישום צ'יפים" : "בקשת צ'יפים"}
               </Button>
             )}
             {canManage && (

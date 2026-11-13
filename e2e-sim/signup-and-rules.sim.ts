@@ -236,16 +236,17 @@ test("invites, early sign-up with seats, table rules and permissions", async ({ 
     const { error: forOther } = await dor.api.from("chip_requests").insert({ night_id: nightId, member_id: await memberId("הדר"), mode: "chips", chips: 100 });
     expect(forOther).not.toBeNull();
 
-    for (const pl of [hadar, gal]) {
-      await btn(pl.page, "בקשת צ'יפים").click();
-      await btn(sheet(pl.page), "שליחה לקופאי").click();
-    }
+    await btn(hadar.page, "בקשת צ'יפים").click();
+    await btn(sheet(hadar.page), "שליחה לקופאי").click();
+    // the cashier takes chips himself: recorded as handed right away
+    await btn(gal.page, "רישום צ'יפים").click();
+    await btn(sheet(gal.page), "רישום: נמסר").click();
     // Gal is the cashier: one tap "handed over" with no photo, or counts by hand
     await btn(gal.page, /^קופה/).click();
     await sheet(gal.page).locator("div.rounded-3xl", { hasText: "דור" }).getByRole("button", { name: "מסרתי 1,000" }).click();
     await expect(sheet(gal.page).locator("div.rounded-3xl", { hasText: "דור" })).toHaveCount(0);
     await btn(sheet(gal.page), "סגור").click();
-    for (const name of ["הדר", "גל"]) {
+    for (const name of ["הדר"]) {
       await btn(gal.page, /^קופה/).click();
       await sheet(gal.page).locator("div.rounded-3xl", { hasText: name }).getByRole("button", { name: "מסירה וצילום" }).click();
       await typeCount(gal.page, 1000, "מסרתי, אישור");

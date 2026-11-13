@@ -18,6 +18,7 @@ export function nightError(e: unknown): string {
   const msg = (e as { message?: string })?.message ?? String(e);
   if (msg.includes("player is not playing")) return "השחקן כבר לא משחק בערב (קם מהשולחן), אי אפשר לרשום לו צ'יפים.";
   if (msg.includes("night is closed")) return "הערב כבר נסגר.";
+  if (msg.includes("only the cashier can record")) return "רק הקופאי או המנהל רושמים צ'יפים שנמסרו.";
   if (msg.includes("flagged chip request")) return "יש לשחקן מסירה שממתינה לאישור מנהל. קודם מחליטים עליה, ואז סוגרים לו חשבון.";
   return msg || "משהו השתבש, נסה שוב";
 }
@@ -99,9 +100,13 @@ export function RequestSheet({
     const failed: string[] = [];
     let lastErr: string | null = null;
     for (const forId of forIds) {
+      // the cashier/admin hands the chips themselves: recorded as handed in one step, no request to approve
+      const direct = canManage
+        ? { status: "approved" as const, given_chips: chips, approved_by: uid, approved_at: new Date().toISOString(), note: "נרשם ישירות בקופה" }
+        : {};
       const { data, error } = await supabase()
         .from("chip_requests")
-        .insert({ night_id: night.id, member_id: forId, requested_by: uid, mode, chips })
+        .insert({ night_id: night.id, member_id: forId, requested_by: uid, mode, chips, ...direct })
         .select()
         .single();
       if (error) {
@@ -109,7 +114,8 @@ export function RequestSheet({
         lastErr = nightError(error);
         continue;
       }
-      await logEvent(night.id, "request", { member_id: forId, chips, money, request_id: data?.id, on_behalf: forId !== me.id });
+      if (canManage) await logEvent(night.id, "approved", { member_id: forId, given: chips, request_id: data?.id, direct: true });
+      else await logEvent(night.id, "request", { member_id: forId, chips, money, request_id: data?.id, on_behalf: forId !== me.id });
     }
     setBusy(false);
     if (failed.length) {
@@ -121,8 +127,9 @@ export function RequestSheet({
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title="בקשת צ'יפים">
+    <Sheet open={open} onClose={onClose} title={canManage ? "רישום צ'יפים" : "בקשת צ'יפים"}>
       <div className="space-y-4">
+        {canManage && <p className="text-xs text-muted">אתה מוסר את הצ&apos;יפים: הם נרשמים מיד כנמסרו, בלי בקשה ואישור. בקשות ששחקנים שולחים בעצמם מגיעות לקופה כרגיל.</p>}
         {canManage && playing.length > 1 && (
           <Field label={forIds.length > 1 ? `עבור ${forIds.length} שחקנים (אותה כמות לכל אחד)` : "עבור (אפשר לסמן כמה)"}>
             <div className="flex flex-wrap gap-2">
@@ -186,7 +193,7 @@ export function RequestSheet({
         {chipSet && chips > 0 && <Breakdown total={chips} chipSet={chipSet} />}
         {err && <p className="text-sm text-loss">{err}</p>}
         <Button size="lg" className="w-full" disabled={chips <= 0} loading={busy} onClick={send}>
-          שליחה לקופאי
+          {canManage ? (forIds.length > 1 ? `רישום: נמסר ל-${forIds.length} שחקנים` : "רישום: נמסר") : "שליחה לקופאי"}
         </Button>
       </div>
     </Sheet>
@@ -964,7 +971,7 @@ export function PlayerSheet({
         )}
         {canManage && !closed && p.status === "playing" && onRequest && (
           <Button className="w-full" onClick={onRequest}>
-            <HandCoins className="size-4" /> בקשת צ'יפים בשבילו
+            <HandCoins className="size-4" /> רישום צ'יפים שנמסרו לו
           </Button>
         )}
         {canManage && !closed && p.status === "playing" && flagged > 0 && (

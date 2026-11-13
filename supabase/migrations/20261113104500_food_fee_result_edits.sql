@@ -36,3 +36,23 @@ revoke execute on function public.game_nights_host_guard() from public, anon, au
 drop trigger if exists game_nights_host_guard on public.game_nights;
 create trigger game_nights_host_guard before insert or update of host_member_id on public.game_nights
   for each row execute function public.game_nights_host_guard();
+
+-- 3. The cashier (or the admin) records chips for a player directly as
+--    handed over, in one step. A player's own request still starts as
+--    'pending' for the cashier: only the admin or the night's cashier may
+--    insert a request that is already approved (before, the insert policy let
+--    a player insert their own request as approved through the API).
+create or replace function public.chip_request_insert_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.status <> 'pending'
+     and not (public.is_admin(public.night_table(new.night_id)) or public.is_cashier(new.night_id)) then
+    raise exception 'only the cashier can record handed chips';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.chip_request_insert_guard() from public, anon, authenticated;
+
+drop trigger if exists chip_request_insert_guard on public.chip_requests;
+create trigger chip_request_insert_guard before insert on public.chip_requests
+  for each row execute function public.chip_request_insert_guard();

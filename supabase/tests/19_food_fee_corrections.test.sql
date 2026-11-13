@@ -38,6 +38,17 @@ update night_players set status = 'out', final_chips = 11000, net = -33.33, boug
  where night_id = tests.id('night') and member_id = tests.id('m_p1');
 reset role;
 
+-- the cashier records chips for a player directly as handed; a player cannot
+select tests.login('admin');
+with x as (insert into chip_requests (night_id, member_id, requested_by, mode, chips, given_chips, status, approved_by, approved_at)
+  values (tests.id('night'), tests.id('m_admin'), tests.id('admin'), 'chips', 1500, 1500, 'approved', tests.id('admin'), now()) returning id)
+  select tests.put('direct', id) from x;
+reset role;
+select tests.eq((select status from chip_requests where id = tests.id('direct')), 'approved', 'the cashier records handed chips in one step');
+select tests.login('p1');
+select tests.throws(format($$ insert into chip_requests (night_id, member_id, requested_by, mode, chips, given_chips, status) values (%L, %L, %L, 'chips', 1500, 1500, 'approved') $$, tests.id('night'), tests.id('m_p1'), tests.id('p1')), '%only the cashier%', 'a player cannot insert their own chips as handed');
+reset role;
+
 -- a player cannot change the fee or a count
 select tests.login('p1');
 update game_nights set food_fee = 0 where id = tests.id('night');

@@ -229,16 +229,17 @@ test("a full game night with six players", async ({ browser, baseURL }) => {
     await expect(sheet(p).getByText("אין בקשות פתוחות")).toBeVisible();
     await btn(sheet(p), "סגור").click();
 
-    await request(dana, { quick: "כניסה" });
-    await request(yossi, { quick: "כניסה" });
-    for (const name of ["דנה", "יוסי"]) {
-      await startHandover(name, 1000);
-      vision.sees(1000);
-      await photograph(yossi.page, 1000);
-      await btn(sheet(yossi.page), "מסרתי, אישור").click();
-      await expect(sheet(yossi.page).getByRole("heading", { name: "קופה" })).toBeVisible();
-      await btn(sheet(yossi.page), "סגור").click();
+    // the admin and the cashier take chips themselves: recorded as handed in one step, no request to approve
+    for (const pl of [dana, yossi]) {
+      await btn(pl.page, "רישום צ'יפים").first().click();
+      const s = sheet(pl.page);
+      await s.getByRole("button").filter({ has: pl.page.getByText("כניסה", { exact: true }) }).click();
+      await btn(s, "רישום: נמסר").click();
+      await expect(s).toHaveCount(0);
     }
+    await btn(yossi.page, /^קופה/).click();
+    await expect(sheet(yossi.page).getByText("אין בקשות פתוחות")).toBeVisible();
+    await btn(sheet(yossi.page), "סגור").click();
     const st = await nightState(nightId);
     expect([st.bought("דנה"), st.bought("יוסי"), st.bought("אבי")]).toEqual([1000, 1000, 2000]);
   });
