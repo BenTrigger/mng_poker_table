@@ -78,9 +78,8 @@ export default function NewNight({ params }: { params: Promise<{ code: string }>
       if (!data?.length) return;
       setSignupId(id);
       const ids = data.map((r) => r.member_id as string).slice(0, MAX_PLAYERS);
-      // the cashier chosen on the sign-up plays tonight even if they did not take a seat
+      // the cashier chosen on the sign-up, when they are on the list
       const sc = st?.cashier_member_id;
-      if (sc && !ids.includes(sc) && ids.length < MAX_PLAYERS) ids.push(sc);
       setSelected(ids);
       setCashier((c) => (sc && ids.includes(sc) ? sc : ids.includes(c) ? c : ""));
       // the opener was the default host only because they were on the list; keep a remembered host

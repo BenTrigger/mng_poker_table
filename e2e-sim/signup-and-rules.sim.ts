@@ -161,7 +161,7 @@ test("invites, early sign-up with seats, table rules and permissions", async ({ 
   });
 
   await test.step("the admin changes the address; players see it live", async () => {
-    await btn(alon.page, "עריכת תאריך, מארח וכתובת").click();
+    await btn(alon.page, "עריכת שם, תאריך, מארח וכתובת").click();
     const s = sheet(alon.page);
     await s.getByPlaceholder("הרצל 10, תל אביב").fill("הנביאים 5, חיפה");
     await btn(s, "שמירה").click();
