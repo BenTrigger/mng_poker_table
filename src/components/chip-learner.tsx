@@ -147,9 +147,35 @@ export function ChipLearner({ tableId, onDone, onCancel }: { tableId: string; on
         {input}
         <Card className="space-y-2 p-3 text-sm">
           <div className="flex items-center gap-2 font-bold text-gold"><Camera className="size-4" /> איך מצלמים</div>
+          <div className="grid grid-cols-2 gap-2 text-center text-[11px] text-muted">
+            <div className="rounded-xl bg-surface-2 p-2">
+              <svg viewBox="0 0 100 44" className="mx-auto h-12 w-full" aria-hidden>
+                <rect width="100" height="44" rx="4" fill="#1f5135" />
+                {["#e0158a", "#1f1f22", "#e8ec3a", "#2b2f9a", "#ece8ea"].map((c, i) => (
+                  <g key={c}>
+                    <circle cx={12 + i * 19} cy="22" r="8" fill={c} stroke="#fff" strokeWidth="1.2" strokeDasharray="2 2" />
+                    <circle cx={12 + i * 19} cy="22" r="4" fill="#fff" />
+                  </g>
+                ))}
+              </svg>
+              <div className="mt-1 font-bold text-ink">תמונה 1: מלמעלה</div>
+              צ&apos;יפ אחד מכל סוג, בשורה, הפנים למעלה
+            </div>
+            <div className="rounded-xl bg-surface-2 p-2">
+              <svg viewBox="0 0 100 44" className="mx-auto h-12 w-full" aria-hidden>
+                <rect y="38" width="100" height="6" rx="2" fill="#1f5135" />
+                {["#e0158a", "#1f1f22", "#e8ec3a", "#2b2f9a", "#ece8ea"].map((c, i) =>
+                  Array.from({ length: 5 }, (_, k) => (
+                    <rect key={`${c}-${k}`} x={3 + i * 19.5} y={33 - k * 5} width="15" height="4.3" rx="1" fill={c} stroke="#fff" strokeWidth="0.5" strokeDasharray="2 2.5" />
+                  )),
+                )}
+              </svg>
+              <div className="mt-1 font-bold text-ink">תמונה 2: מהצד</div>
+              ערימה של 5 מכל סוג, בגובה השולחן
+            </div>
+          </div>
           <ul className="list-disc space-y-1 ps-5 text-muted">
-            <li>שים על השולחן צ'יפ אחד או שניים מכל סוג, עם הפנים למעלה, ותצלם מלמעלה. אפשר את כולם בתמונה אחת.</li>
-            <li>תצלם גם ערימה קטנה מכל סוג מהצד, בגובה השולחן. ככה האפליקציה תזהה טוב יותר ערימות בהמשך.</li>
+            <li>שתי התמונות האלה הן התבנית. אפשר להוסיף עוד מזוויות אחרות.</li>
             <li>אור טוב, בלי פלאש ישיר, רקע אחיד. עד {MAX_LEARN_PHOTOS} תמונות.</li>
           </ul>
         </Card>

@@ -206,6 +206,35 @@ function Breakdown({ total, chipSet }: { total: number; chipSet: ChipSet }) {
   );
 }
 
+/** How to photograph chips so the count is right: a small picture plus three rules. */
+export function StackPhotoGuide() {
+  return (
+    <details className="rounded-2xl border border-line bg-surface-2/50 p-3 text-xs">
+      <summary className="cursor-pointer font-bold text-gold">איך מצלמים כדי שהספירה תצא מדויקת</summary>
+      <div className="mt-2 flex items-center gap-3">
+        <svg viewBox="0 0 120 70" className="h-16 w-28 shrink-0" aria-hidden>
+          <rect x="0" y="62" width="120" height="8" rx="2" fill="#1f5135" />
+          {[
+            { x: 6, n: 8, c: "#e0158a" },
+            { x: 34, n: 10, c: "#1f1f22" },
+            { x: 62, n: 6, c: "#e8ec3a" },
+            { x: 90, n: 9, c: "#2b2f9a" },
+          ].map((st) =>
+            Array.from({ length: st.n }, (_, i) => (
+              <rect key={`${st.x}-${i}`} x={st.x} y={58 - i * 5} width="24" height="4.2" rx="1.2" fill={st.c} stroke="#fff" strokeWidth="0.4" strokeDasharray="2 3" />
+            )),
+          )}
+        </svg>
+        <ul className="list-disc space-y-1 ps-4 text-muted">
+          <li>ערימה לכל צבע, עד 20 צ&apos;יפים, בשורה עם רווח קטן.</li>
+          <li>מהצד, בגובה השולחן, כל הערימות בתמונה ובפוקוס.</li>
+          <li>אור על צד הערימות, בלי פלאש. ערימה גבוהה? לחלק לשתיים.</li>
+        </ul>
+      </div>
+    </details>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Chip counter: photo -> AI count (if configured) with manual override
 // ---------------------------------------------------------------------------
@@ -238,7 +267,8 @@ export function ChipCounter({
     if (!f) return;
     setErr(null);
     setCount(null);
-    const blob = await compressImage(f);
+    // tall stacks need detail: keep more pixels than other photos
+    const blob = await compressImage(f, 2048, 0.88);
     setPhoto(blob);
     setPreview(URL.createObjectURL(blob));
     // the photo may come before the "is counting on?" answer did: wait for it
@@ -297,6 +327,7 @@ export function ChipCounter({
           {aiOn && <span className="flex items-center gap-1 text-[11px] text-muted"><Sparkles className="size-3" /> {chipSet?.chips.some((c) => c.images?.length) ? "אספור לפי תמונות הצ'יפים של הערכה" : "אספור לפי צבעים"}</span>}
         </button>
       )}
+      {!preview && aiOn && <StackPhotoGuide />}
 
       {counting && <div className="flex items-center justify-center gap-2 py-2 text-sm text-gold"><Sparkles className="size-4 animate-pulse" /> סופר צ'יפים...</div>}
       {(count || byColour) && (
@@ -336,6 +367,7 @@ export function ChipCounter({
           {count ? (
           <>
           <p className="text-[11px] text-muted">הזיהוי טעה? תקן את הכמות לכל צבע והסכום יתעדכן. התיקון נשמר לערכה ועוזר לזיהוי הבא.</p>
+          {count.recounted && <p className="text-[11px] text-gold">הספירה הראשונה לא התאימה לבקשה, אז ספרתי שוב.</p>}
           {count.notes && <p className="text-xs text-muted">{count.notes}</p>}
           <input
             className={`${inputCls} h-10 text-sm`}

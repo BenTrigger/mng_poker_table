@@ -8,7 +8,7 @@ import type { Chip } from "@/lib/types";
 import { checkAiQuota } from "@/lib/ai-quota";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const Body = z.object({
   image: z.string().min(100), // base64, no data: prefix
@@ -22,10 +22,13 @@ const Body = z.object({
 });
 
 const Result = z.object({
-  counts: z.array(z.object({ color: z.string(), count: z.number().int() })),
+  stacks: z.array(z.object({ color: z.string(), count: z.number().int() })),
   confidence: z.enum(["high", "medium", "low"]),
   notes: z.string(),
 });
+
+// Counting must not miss chips, so it runs on Opus at high effort by default.
+const MODEL = process.env.CHIP_COUNT_MODEL || "claude-opus-5-5";
 
 export async function GET() {
   return NextResponse.json({ enabled: Boolean(process.env.ANTHROPIC_API_KEY) });
@@ -41,7 +44,7 @@ export async function POST(req: Request) {
 
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "bad request" }, { status: 400 });
-  const { image, mediaType, chips, tableId, chipSetId } = parsed.data;
+  const { image, mediaType, chips, tableId, chipSetId, expected } = parsed.data;
   if (tableId) {
     const quota = await checkAiQuota(sb, tableId, "count");
     if (quota) return quota;
@@ -53,48 +56,55 @@ export async function POST(req: Request) {
   const [refs, lessons] = await Promise.all([referencePhotos(sb, chips), pastCorrections(sb, chipSetId)]);
 
   const client = new Anthropic();
+  const instructions =
+    `This photo shows stacks of poker chips, usually photographed from the side at table level.\n` +
+    `The chip set has these colours:\n${palette}\n\n` +
+    (refs.length ? `The reference photos above show real chips of this set (face and side views); match the chips in the photo to them.\n` : "") +
+    (lessons ? `People corrected earlier automatic counts of this same chip set. Learn from these mistakes:\n${lessons}\n` : "") +
+    `Work stack by stack, left to right. For every stack (or every single-colour section of a mixed stack) add one entry to "stacks" with its colour and how many chips it has. ` +
+    `Count each chip edge individually from bottom to top; for tall stacks count in groups of 5 and double-check. Do not count the same chip twice, and include chips lying flat or partly hidden. ` +
+    `Use exactly the colour names above. Set confidence to "low" if chips are hidden, blurry or colours are hard to tell apart (dark colours often look alike from the side), ` +
+    `and explain briefly in "notes" in Hebrew, including the per-stack counts.`;
+  const content: Anthropic.ContentBlockParam[] = [
+    ...refs,
+    ...(refs.length ? [{ type: "text" as const, text: "The photo to count:" }] : []),
+    { type: "image", source: { type: "base64", media_type: mediaType, data: image } },
+    { type: "text", text: instructions },
+  ];
+
   try {
-    const response = await client.messages.parse({
-      // counting runs many times a night, so it uses the cheaper model; learning a set uses Opus
-      model: process.env.CHIP_COUNT_MODEL || "claude-sonnet-5-5",
-      max_tokens: 16000,
-      output_config: { effort: "high", format: zodOutputFormat(Result) },
-      messages: [
+    let out = await countOnce(client, [{ role: "user", content }]);
+    if (!out) return NextResponse.json({ error: "could not count chips" }, { status: 422 });
+    let tally = toCounts(out, chips);
+    let recounted = false;
+
+    // The cashier knows how much was asked for. If the photo disagrees, look once more
+    // (only then, to keep the cost down) without being told to force a match.
+    if (expected && tally.total !== expected) {
+      const second = await countOnce(client, [
+        { role: "user", content },
+        { role: "assistant", content: JSON.stringify(out) },
         {
           role: "user",
-          content: [
-            ...refs,
-            ...(refs.length ? [{ type: "text" as const, text: "The photo to count:" }] : []),
-            { type: "image", source: { type: "base64", media_type: mediaType, data: image } },
-            {
-              type: "text",
-              text:
-                `This photo shows one or more stacks of poker chips, usually photographed from the side.\n` +
-                `Count how many chips of each colour are in the photo. The chip set has these colours:\n${palette}\n\n` +
-                (refs.length ? `The reference photos above show real chips of this set (face and side views); match the chips in the photo to them.\n` : "") +
-                (lessons ? `People corrected earlier automatic counts of this same chip set. Learn from these mistakes:\n${lessons}\n` : "") +
-                `Stacks are often lined up side by side in a row. Count edge stripes carefully, stack by stack, then add them up. Use exactly the colour names above in "counts", ` +
-                `one entry per colour (count 0 if absent). Set confidence to "low" if chips are hidden, blurry, ` +
-                `or colours are hard to tell apart, and explain briefly in "notes" (in Hebrew).`,
-            },
-          ],
+          content:
+            `Your count adds up to ${tally.total}, but ${expected} was expected. Look at the photo again and recount every stack chip by chip, ` +
+            `paying special attention to tall stacks and to colours that look alike. If your first count was right, keep it; do not change counts just to match. ` +
+            `Return the full result again.`,
         },
-      ],
-    });
-
-    if (response.stop_reason === "refusal" || !response.parsed_output) {
-      return NextResponse.json({ error: "could not count chips" }, { status: 422 });
+      ]);
+      if (second) {
+        out = second;
+        tally = toCounts(second, chips);
+        recounted = true;
+      }
     }
-    const out = response.parsed_output;
-    const counts = chips.map((c) => ({
-      color: c.color,
-      count: Math.max(0, out.counts.find((x) => x.color === c.color)?.count ?? 0),
-    }));
+
     return NextResponse.json({
-      counts,
-      total: chipSetTotal(counts, chips),
+      counts: tally.counts,
+      total: tally.total,
       confidence: out.confidence,
       notes: out.notes,
+      recounted,
     });
   } catch (error) {
     if (error instanceof Anthropic.RateLimitError) {
@@ -151,4 +161,25 @@ async function pastCorrections(sb: Awaited<ReturnType<typeof supabaseServer>>, c
     })
     .filter(Boolean)
     .join("\n");
+}
+
+type CountResult = z.infer<typeof Result>;
+
+async function countOnce(client: Anthropic, messages: Anthropic.MessageParam[]): Promise<CountResult | null> {
+  const response = await client.messages.parse({
+    model: MODEL,
+    max_tokens: 16000,
+    output_config: { effort: "high", format: zodOutputFormat(Result) },
+    messages,
+  });
+  if (response.stop_reason === "refusal" || !response.parsed_output) return null;
+  return response.parsed_output;
+}
+
+function toCounts(out: CountResult, chips: Chip[]) {
+  const counts = chips.map((c) => ({
+    color: c.color,
+    count: out.stacks.filter((s) => s.color === c.color).reduce((n, s) => n + Math.max(0, s.count), 0),
+  }));
+  return { counts, total: chipSetTotal(counts, chips) };
 }
