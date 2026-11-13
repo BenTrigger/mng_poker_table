@@ -3,7 +3,7 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  CalendarClock, Share2, Copy, Check, Lock, LockOpen, Play, Hourglass, LogOut, Minus, Plus, Ban, UserPlus, ArrowDownToLine, Trash2, Armchair, Pencil,
+  CalendarClock, Share2, Copy, Check, Lock, LockOpen, Play, Hourglass, LogOut, Minus, Plus, Ban, UserPlus, ArrowDownToLine, Trash2, Armchair, Pencil, Landmark, Coins,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { addGuest } from "@/lib/guests";
@@ -14,7 +14,8 @@ import { PlaceInfo } from "@/components/place";
 import { useGeocode } from "@/lib/waze";
 import { Avatar, Badge, Button, Card, Empty, Field, Sheet, Spinner, Toast, inputCls } from "@/components/ui";
 import { seatMap, signupDate, signupError, signupLink, signupShareText, signupTime, useSignup, waitingList, whatsappUrl } from "@/lib/signup";
-import type { Member, SignupSeat } from "@/lib/types";
+import type { ChipSet, Member, SignupSeat, SignupSettings } from "@/lib/types";
+import { formatMoney } from "@/lib/calc";
 
 /** Date as a value for <input type="datetime-local"> in local time */
 function toLocalInput(d: Date) {
@@ -40,7 +41,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
   const [copied, setCopied] = useState(false);
   const [seatSheet, setSeatSheet] = useState<number | null>(null); // seat number the admin/player tapped
   const [members, setMembers] = useState<Member[]>([]);
-  const [edit, setEdit] = useState<{ startsAt: string; place: string; address: string; note: string } | null>(null);
+  const [edit, setEdit] = useState<{ name: string; startsAt: string; place: string; address: string; note: string } | null>(null);
 
   const isAdmin = view?.me?.role === "admin" && view.me.status === "active";
   const tableId = view?.table.id;
@@ -129,7 +130,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
     run("status", () => supabase().from("signups").update({ status }).eq("id", s.id), status === "open" ? "ההרשמה נפתחה" : status === "closed" ? "ההרשמה נסגרה" : "הערב בוטל");
 
   const editable = isAdmin && (s.status === "open" || s.status === "closed");
-  const openEdit = () => setEdit({ startsAt: toLocalInput(new Date(s.starts_at)), place: s.location ?? "", address: s.address ?? "", note: s.note ?? "" });
+  const openEdit = () => setEdit({ name: s.name ?? "", startsAt: toLocalInput(new Date(s.starts_at)), place: s.location ?? "", address: s.address ?? "", note: s.note ?? "" });
   async function saveEdit() {
     if (!edit?.startsAt) return;
     const ok = await run(
@@ -137,7 +138,7 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
       () =>
         supabase()
           .from("signups")
-          .update({ starts_at: new Date(edit.startsAt).toISOString(), location: edit.place.trim() || null, address: edit.address.trim() || null, note: edit.note.trim() || null })
+          .update({ name: edit.name.trim().slice(0, 60) || null, starts_at: new Date(edit.startsAt).toISOString(), location: edit.place.trim() || null, address: edit.address.trim() || null, note: edit.note.trim() || null })
           .eq("id", s.id)
           .select("id")
           .single(),
@@ -165,16 +166,19 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
 
   return (
     <>
-      <TopBar title="הרשמה לערב" sub={table.name} back={myId ? `/t/${table.code}` : "/tables"} />
+      <TopBar title={s.name || "הרשמה לערב"} sub={table.name} back={myId ? `/t/${table.code}` : "/tables"} />
       <Toast text={toast?.text ?? null} tone={toast?.tone} />
       <main className={`mx-auto max-w-lg space-y-4 px-4 pt-3 ${isAdmin ? "pb-52" : "pb-36"}`}>
         <Card className="space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <div className="font-[family-name:var(--font-display)] text-2xl font-extrabold">{signupDate(s.starts_at)}</div>
+            <div className="min-w-0">
+              {s.name && <div className="truncate font-[family-name:var(--font-display)] text-2xl font-extrabold text-gold">{s.name}</div>}
+              <div className={`font-[family-name:var(--font-display)] font-extrabold ${s.name ? "text-lg" : "text-2xl"}`}>{signupDate(s.starts_at)}</div>
+            </div>
             <div className="flex items-center gap-2">
               <Badge tone={STATUS[s.status].tone}>{STATUS[s.status].label}</Badge>
               {editable && (
-                <Button size="sm" variant="soft" onClick={openEdit} aria-label="עריכת תאריך, מארח וכתובת">
+                <Button size="sm" variant="soft" onClick={openEdit} aria-label="עריכת שם, תאריך, מארח וכתובת">
                   <Pencil className="size-4" /> עריכה
                 </Button>
               )}
@@ -188,6 +192,19 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
           <PlaceInfo host={s.location} address={s.address} at={at} />
           {s.note && <p className="text-sm">{s.note}</p>}
         </Card>
+
+        <NightSettingsCard
+          settings={s.settings ?? {}}
+          isAdmin={isAdmin}
+          editable={editable}
+          tableId={table.id}
+          members={members}
+          seats={seats}
+          busy={busy === "settings"}
+          onSave={(settings) =>
+            run("settings", () => supabase().from("signups").update({ settings }).eq("id", s.id).select("id").single(), "הגדרות הערב נשמרו")
+          }
+        />
 
         <PokerTable
           seats={tableSeats}
@@ -387,6 +404,9 @@ export default function SignupPage({ params }: { params: Promise<{ id: string }>
       <Sheet open={!!edit} onClose={() => setEdit(null)} title="עריכת פרטי הערב">
         {edit && (
           <div className="space-y-4">
+            <Field label="שם הערב (לא חובה)">
+              <input className={inputCls} placeholder="השישי ה-13" maxLength={60} value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
+            </Field>
             <Field label="מתי">
               <input type="datetime-local" className={inputCls} value={edit.startsAt} onChange={(e) => setEdit({ ...edit, startsAt: e.target.value })} />
             </Field>
@@ -503,5 +523,128 @@ function SeatSheet(p: {
         </>
       )}
     </div>
+  );
+}
+
+/** The night's settings on the sign-up: chip set, buy-in, cashier, food. The admin edits them here; the new-night screen starts from them. */
+function NightSettingsCard({
+  settings, isAdmin, editable, tableId, members, seats, busy, onSave,
+}: {
+  settings: SignupSettings; isAdmin: boolean; editable: boolean; tableId: string; members: Member[]; seats: SignupSeat[]; busy: boolean;
+  onSave: (s: SignupSettings) => Promise<boolean>;
+}) {
+  const [chipSets, setChipSets] = useState<ChipSet[]>([]);
+  const [draft, setDraft] = useState<SignupSettings | null>(null);
+  useEffect(() => {
+    if (!isAdmin) return;
+    supabase().from("chip_sets").select("*").eq("table_id", tableId).order("created_at").then(({ data }) => setChipSets((data as ChipSet[]) ?? []));
+  }, [isAdmin, tableId]);
+
+  const nameOf = (id?: string) => (id ? members.find((m) => m.id === id)?.display_name ?? seats.find((x) => x.member_id === id)?.display_name : undefined);
+  const cashier = nameOf(settings.cashier_member_id);
+  const host = nameOf(settings.host_member_id);
+  const set = chipSets.find((c) => c.id === settings.chip_set_id);
+  const hasBuyin = !!settings.chips_per_buyin && !!settings.money_per_buyin;
+  if (!isAdmin && !hasBuyin && !cashier) return null;
+
+  // seated players first in the cashier/host lists
+  const seatedIds = seats.filter((x) => x.seat !== null).map((x) => x.member_id);
+  const people = [...members].sort((a, b) => Number(seatedIds.includes(b.id)) - Number(seatedIds.includes(a.id)));
+  const num = (v: string) => Number(v.replace(/[^\d.]/g, "")) || undefined;
+
+  return (
+    <>
+      <Card className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-bold">הגדרות הערב</h2>
+          {isAdmin && editable && (
+            <Button size="sm" variant="soft" onClick={() => setDraft({ ...settings })} aria-label="עריכת הגדרות הערב">
+              <Pencil className="size-4" /> עריכה
+            </Button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
+          <span className="inline-flex items-center gap-1">
+            <Coins className="size-4" />
+            {hasBuyin ? (
+              <span className="num">
+                {Number(settings.chips_per_buyin).toLocaleString()} צ&apos;יפים = {formatMoney(Number(settings.money_per_buyin))}
+              </span>
+            ) : (
+              "מחיר כניסה לא נקבע"
+            )}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Landmark className="size-4" /> קופאי: {cashier ?? "לא נקבע"}
+          </span>
+          {!!settings.food_fee && (
+            <span>
+              🍽️ אוכל {formatMoney(settings.food_fee)}
+              {host ? ` למארח (${host})` : ""}
+            </span>
+          )}
+          {isAdmin && set && <span>ערכה: {set.name}</span>}
+        </div>
+        {isAdmin && <p className="text-xs text-muted">כשפותחים את הערב, ההגדרות האלה כבר ממולאות. אפשר לשנות גם שם.</p>}
+      </Card>
+
+      <Sheet open={!!draft} onClose={() => setDraft(null)} title="הגדרות הערב">
+        {draft && (
+          <div className="space-y-4">
+            <Field label="ערכת צ'יפים">
+              <select className={inputCls} value={draft.chip_set_id ?? ""} onChange={(e) => setDraft({ ...draft, chip_set_id: e.target.value || undefined })}>
+                <option value="">{chipSets.length ? "בחירה כשפותחים את הערב" : "עוד אין ערכה (מגדירים כשפותחים את הערב)"}</option>
+                {chipSets.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="צ'יפים בכניסה">
+                <input className={inputCls} inputMode="numeric" value={draft.chips_per_buyin ?? ""} onChange={(e) => setDraft({ ...draft, chips_per_buyin: num(e.target.value) })} />
+              </Field>
+              <Field label="עולה (₪)">
+                <input className={inputCls} inputMode="decimal" value={draft.money_per_buyin ?? ""} onChange={(e) => setDraft({ ...draft, money_per_buyin: num(e.target.value) })} />
+              </Field>
+            </div>
+            <Field label="קופאי">
+              <select className={inputCls} value={draft.cashier_member_id ?? ""} onChange={(e) => setDraft({ ...draft, cashier_member_id: e.target.value || undefined })}>
+                <option value="">לא נקבע</option>
+                {people.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.display_name}
+                    {seatedIds.includes(m.id) ? "" : " (לא רשום)"}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="דמי אוכל לשחקן (₪)">
+                <input className={inputCls} inputMode="decimal" placeholder="0" value={draft.food_fee ?? ""} onChange={(e) => setDraft({ ...draft, food_fee: num(e.target.value) ?? 0 })} />
+              </Field>
+              <Field label="מארח (לא משלם)">
+                <select className={inputCls} value={draft.host_member_id ?? ""} onChange={(e) => setDraft({ ...draft, host_member_id: e.target.value || undefined })}>
+                  <option value="">בלי מארח</option>
+                  {people.map((m) => (
+                    <option key={m.id} value={m.id}>{m.display_name}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <Button
+              className="w-full"
+              size="lg"
+              loading={busy}
+              onClick={async () => {
+                const clean = Object.fromEntries(Object.entries(draft).filter(([, v]) => v !== undefined && v !== "")) as SignupSettings;
+                if (await onSave(clean)) setDraft(null);
+              }}
+            >
+              <Check className="size-5" /> שמירה
+            </Button>
+          </div>
+        )}
+      </Sheet>
+    </>
   );
 }

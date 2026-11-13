@@ -1,7 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import { wazeUrl, type LatLng } from "./waze";
 import { supabase } from "./supabase/client";
-import type { Signup, SignupSeat, SignupView } from "./types";
+import type { LastSettings, Signup, SignupSeat, SignupSettings, SignupView } from "./types";
+
+/** A new sign-up's night settings, starting from the table's last night */
+export function signupSettingsFrom(ls: LastSettings | null | undefined): SignupSettings {
+  const o: SignupSettings = {
+    chip_set_id: ls?.chip_set_id,
+    chips_per_buyin: ls?.chips_per_buyin ?? 1000,
+    money_per_buyin: ls?.money_per_buyin ?? 100,
+    cashier_member_id: ls?.cashier_member_id,
+    food_fee: ls?.food_fee ?? 50,
+    host_member_id: ls?.host_member_id,
+  };
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null)) as SignupSettings;
+}
 
 export const signupDate = (s: string) =>
   new Date(s).toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "numeric" });
@@ -24,7 +37,7 @@ export function signupShareText(tableName: string, s: Signup, seats: SignupSeat[
   const free = s.seats - taken.length;
   const wait = waitingList(seats);
   const lines = [
-    `♠️ ערב פוקר - ${tableName}`,
+    s.name ? `♠️ ${s.name} - ${tableName}` : `♠️ ערב פוקר - ${tableName}`,
     `📅 ${signupDate(s.starts_at)} בשעה ${signupTime(s.starts_at)}`,
   ];
   if (s.location) lines.push(`🏠 מארח: ${s.location}`);

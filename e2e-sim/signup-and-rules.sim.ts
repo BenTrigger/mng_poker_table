@@ -120,7 +120,7 @@ test("invites, early sign-up with seats, table rules and permissions", async ({ 
   let signupUrl = "";
   await test.step("the admin opens an early sign-up for 3 seats with host and address", async () => {
     await alon.page.goto(`/t/${code}`);
-    await btn(alon.page, "הרשמה מוקדמת").click();
+    await btn(alon.page, "הרשמה מוקדמת לערב").click();
     const s = sheet(alon.page);
     await s.getByRole("group", { name: "כמה מקומות בשולחן" }).getByRole("button", { name: "4" }).click();
     await s.getByPlaceholder("אצל יוסי").fill("אצל אלון");
@@ -161,7 +161,7 @@ test("invites, early sign-up with seats, table rules and permissions", async ({ 
   });
 
   await test.step("the admin changes the address; players see it live", async () => {
-    await btn(alon.page, "עריכת תאריך, מארח וכתובת").click();
+    await btn(alon.page, "עריכת שם, תאריך, מארח וכתובת").click();
     const s = sheet(alon.page);
     await s.getByPlaceholder("הרצל 10, תל אביב").fill("הנביאים 5, חיפה");
     await btn(s, "שמירה").click();
