@@ -147,6 +147,8 @@ export type ChipCount = {
   total: number;
   confidence: "high" | "medium" | "low";
   notes: string;
+  /** the first count disagreed with the expected amount, so the photo was counted again */
+  recounted?: boolean;
 };
 
 /** A person's fix to an automatic count, or a free note about the chip set. Fed back into later counts. */
