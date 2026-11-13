@@ -260,9 +260,6 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
             <Card className="p-0">
               <div className="flex items-center justify-between px-4 pb-1 pt-4">
                 <h2 className="font-bold">מי קנה ובכמה</h2>
-                <button className="flex items-center gap-1 text-xs text-muted" onClick={() => setShowFeed((s) => !s)}>
-                  <Activity className="size-3.5" /> {showFeed ? "הסתר יומן" : "יומן פעולות"}
-                </button>
               </div>
               <div className="divide-y divide-line">
                 {[...lines]
@@ -291,10 +288,24 @@ export default function NightPage({ params }: { params: Promise<{ code: string; 
                     );
                   })}
               </div>
-              {showFeed && <EventFeed events={n.events} members={t.members} />}
             </Card>
           </>
         )}
+
+        {/* the night's log, the same for everyone (admin, cashier and players) */}
+        <Card className="mt-3 p-0">
+          <div className="flex items-center justify-between px-4 pb-1 pt-4">
+            <h2 className="flex items-center gap-1.5 font-bold">
+              <Activity className="size-4 text-muted" /> יומן הערב
+            </h2>
+            {n.events.length > 5 && (
+              <button className="text-xs font-bold text-gold" onClick={() => setShowFeed((s) => !s)}>
+                {showFeed ? "רק האחרונות" : `הצג הכל (${n.events.length})`}
+              </button>
+            )}
+          </div>
+          <EventFeed events={showFeed ? n.events : n.events.slice(0, 5)} members={t.members} />
+        </Card>
       </main>
 
       {!closed && (
