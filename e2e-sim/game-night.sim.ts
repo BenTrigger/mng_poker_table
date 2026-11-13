@@ -281,6 +281,10 @@ test("a full game night with six players", async ({ browser, baseURL }) => {
     vision.sees(2600);
     await photograph(dana.page, 2600);
     await btn(sheet(dana.page), "סגירת החשבון שלו").click();
+    // the sheet stays on Ron: his result next to the food fee, nothing hidden
+    await expect(sheet(dana.page).getByText("החשבון נסגר")).toBeVisible();
+    await expect(sheet(dana.page).getByText("סה״כ בהתחשבנות")).toBeVisible();
+    await btn(sheet(dana.page), "סגור").click();
     await expect(sheet(dana.page)).toHaveCount(0);
     const st = await nightState(nightId);
     const ronRow = st.players.find((p) => p.member_id === st.idOf("רון"))!;
@@ -384,12 +388,44 @@ test("a full game night with six players", async ({ browser, baseURL }) => {
       paid.set(s.from_member, (paid.get(s.from_member) ?? 0) - Number(s.amount));
       paid.set(s.to_member, (paid.get(s.to_member) ?? 0) + Number(s.amount));
     }
-    for (const x of st.players) expect(Math.round((paid.get(x.member_id) ?? 0) * 100) + 0, `transfers for ${x.member_id}`).toBe(Math.round(Number(x.net) * 100) + 0);
+    // food: everyone but the host (Dana, who opened the night) pays her ₪50, apart from the chips
+    expect(Number(st.night.food_fee)).toBe(50);
+    expect(st.night.host_member_id).toBe(st.idOf("דנה"));
+    const food = (id: string) => (id === st.idOf("דנה") ? 50 * (st.players.length - 1) : -50);
+    for (const x of st.players) expect(Math.round((paid.get(x.member_id) ?? 0) * 100) + 0, `transfers for ${x.member_id}`).toBe(Math.round((Number(x.net) + food(x.member_id)) * 100) + 0);
     // the photos are gone from storage
     const { data: files } = await db().storage.from("chip-photos").list(nightId);
     expect(files ?? []).toHaveLength(0);
     // money check: what everyone bought, in shekels
     expect(st.bought("אבי") * RATE).toBe(300);
+  });
+
+  await test.step("after the close the admin fixes a wrong count by cash amount; results and transfers follow", async () => {
+    const p = dana.page;
+    const before = await nightState(nightId);
+    const avi0 = before.players.find((x) => x.member_id === before.idOf("אבי"))!;
+    await p.locator("main button", { hasText: "אבי" }).filter({ hasText: "סיים עם" }).click();
+    await btn(sheet(p), /תיקון ספירה/).click();
+    await btn(sheet(p), "סכום במזומן ₪").click();
+    const typed = Math.round((Number(avi0.final_chips) + 100) * RATE);
+    await sheet(p).getByLabel("סה״כ בשקלים").fill(String(typed));
+    await expect(sheet(p).getByText(`= ${(Number(avi0.final_chips) + 100).toLocaleString("en-US")} צ'יפים`)).toBeVisible();
+    await btn(sheet(p), "שמירת התיקון").click();
+    await expect(sheet(p).getByText("הספירה תוקנה וההעברות חושבו מחדש")).toBeVisible();
+    await btn(sheet(p), "סגור").click();
+
+    await expect.poll(async () => Number((await nightState(nightId)).players.find((x) => x.member_id === before.idOf("אבי"))!.final_chips)).toBe(Number(avi0.final_chips) + 100);
+    const st = await nightState(nightId);
+    const nets = st.players.map((x) => Number(x.net));
+    expect(Math.abs(Math.round(nets.reduce((a, b) => a + b, 0) * 100))).toBe(0);
+    const food = (id: string) => (id === st.idOf("דנה") ? 50 * (st.players.length - 1) : -50);
+    const paid = new Map<string, number>();
+    for (const s of st.settlements) {
+      paid.set(s.from_member, (paid.get(s.from_member) ?? 0) - Number(s.amount));
+      paid.set(s.to_member, (paid.get(s.to_member) ?? 0) + Number(s.amount));
+    }
+    for (const x of st.players) expect(Math.round((paid.get(x.member_id) ?? 0) * 100) + 0, `transfers for ${x.member_id}`).toBe(Math.round((Number(x.net) + food(x.member_id)) * 100) + 0);
+    expect(st.events.some((e) => e.kind === "count_edited" && e.payload.after_close === true)).toBe(true);
   });
 
   await test.step("everyone sees the summary and a winner marks a transfer as paid", async () => {
