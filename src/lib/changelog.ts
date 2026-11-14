@@ -6,6 +6,14 @@ export type Release = { version: string; date: string; title: string; items: str
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.20.1",
+    date: "2026-11-14",
+    title: "שינוי שם לאורח",
+    items: [
+      "במסך השחקנים לוחצים על אורח ומתקנים את השם ישר בחלון (בלי חלונית קופצת). השם החדש מופיע בכל הערבים, בהיסטוריה ובסטטיסטיקה",
+    ],
+  },
+  {
     version: "1.20.0",
     date: "2026-11-13",
     title: "יומן ההרשמה",

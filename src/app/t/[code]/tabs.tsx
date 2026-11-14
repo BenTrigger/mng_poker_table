@@ -137,6 +137,13 @@ export function PlayersTab({ ctx }: { ctx: Ctx }) {
   const [sel, setSel] = useState<Member | null>(null);
   const [copied, setCopied] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const selId = sel?.id;
+  const selName = sel?.display_name ?? "";
+  useEffect(() => {
+    setNewName(selName);
+    setErr("");
+  }, [selId, selName]);
   const [err, setErr] = useState("");
   const active = ctx.members.filter((m) => m.status === "active");
   const pending = ctx.members.filter((m) => m.status === "pending");
@@ -180,12 +187,21 @@ export function PlayersTab({ ctx }: { ctx: Ctx }) {
     }
   }
 
+  // Admin: fix a guest's name. Everything points at the member row, so the new
+  // name shows on every night, the history and the statistics.
   async function rename(m: Member) {
-    const n = prompt("שם האורח", m.display_name)?.trim();
+    const n = newName.trim().replace(/\s+/g, " ").slice(0, 40);
     if (!n || n === m.display_name) return;
-    await supabase().from("table_members").update({ display_name: n.slice(0, 40) }).eq("id", m.id);
+    if (ctx.members.some((x) => x.id !== m.id && x.status !== "removed" && x.display_name.toLowerCase() === n.toLowerCase())) {
+      return setErr(`כבר יש בשולחן שחקן בשם "${n}". בחר שם אחר.`);
+    }
+    setBusy(true);
+    setErr("");
+    const { error } = await supabase().from("table_members").update({ display_name: n }).eq("id", m.id).select("id").single();
+    setBusy(false);
+    if (error) return setErr("לא הצלחתי לשמור את השם, נסה שוב");
     await ctx.reload();
-    setSel(null);
+    setSel({ ...m, display_name: n });
   }
 
   async function setStatus(m: Member, patch: Partial<Member>) {
@@ -275,7 +291,7 @@ export function PlayersTab({ ctx }: { ctx: Ctx }) {
                 <div className="truncate font-bold">
                   {m.display_name} {m.id === ctx.me.id && <span className="text-xs text-muted">(אני)</span>}
                 </div>
-                {!m.user_id && <div className="text-xs text-warn">אורח · עוד לא נרשם לאפליקציה</div>}
+                {!m.user_id && <div className="text-xs text-warn">אורח · עוד לא נרשם לאפליקציה{ctx.isAdmin && " · לחיצה לשינוי שם"}</div>}
               </div>
               {m.role === "admin" && (
                 <Badge tone="gold">
@@ -320,15 +336,29 @@ export function PlayersTab({ ctx }: { ctx: Ctx }) {
               </>
             )}
             {!sel.user_id && (
-              <div className="grid grid-cols-2 gap-2">
+              <div>
                 <Button variant="soft" className="w-full" disabled={busy} onClick={() => { setErr(""); setLinkOpen(true); }}>
                   <Link2 className="size-4" /> קישור לחשבון קיים
                 </Button>
-                <Button variant="soft" className="w-full" disabled={busy} onClick={() => rename(sel)}>
-                  <Pencil className="size-4" /> שינוי שם
-                </Button>
               </div>
             )}
+            {!sel.user_id && (
+              <Field label="שם האורח" hint="השם החדש יופיע בכל הערבים, בהיסטוריה ובסטטיסטיקה.">
+                <div className="flex gap-2">
+                  <input
+                    className={`${inputCls} h-11`}
+                    value={newName}
+                    maxLength={40}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && rename(sel)}
+                  />
+                  <Button size="md" variant="soft" loading={busy} disabled={!newName.trim() || newName.trim() === sel.display_name} onClick={() => rename(sel)}>
+                    <Pencil className="size-4" /> שמירה
+                  </Button>
+                </div>
+              </Field>
+            )}
+            {err && !linkOpen && <p className="text-sm text-loss">{err}</p>}
             {sel.user_id && sel.id !== ctx.me.id && (
               <Button variant="soft" className="w-full" onClick={() => setStatus(sel, { role: sel.role === "admin" ? "player" : "admin" }).then(() => setSel(null))}>
                 <Crown className="size-4" /> {sel.role === "admin" ? "הסרת הרשאת מנהל" : "הפוך למנהל משנה"}
